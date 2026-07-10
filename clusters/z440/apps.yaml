@@ -14,3 +14,26 @@ spec:
   # apps/*/certificate.yaml fail with "issuer not found" on the first reconcile.
   dependsOn:
     - name: infrastructure
+  # Without wait/healthChecks, Flux reports Ready as soon as it has *applied* the
+  # manifests -- a crash-looping Deployment would still show green. These make
+  # the Kustomization go NotReady when a workload is actually unhealthy, which is
+  # what an Alert can then fire on.
+  wait: true
+  timeout: 5m
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: web
+      namespace: prod
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: ws
+      namespace: prod
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: web
+      namespace: dev
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: ws
+      namespace: dev
