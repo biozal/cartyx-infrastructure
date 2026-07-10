@@ -1,0 +1,66 @@
+# cloudflared connector for tunnel `cartyx-k3s`.
+#
+# Routing config lives in Cloudflare (config_src: cloudflare), not here -- this
+# Deployment only runs the connector. Two replicas so a rolling restart or node
+# hiccup does not drop the tunnel (Cloudflare load-balances across connectors).
+#
+# Traffic path:
+#   browser -> Cloudflare edge (terminates TLS with Cloudflare's cert)
+#           -> cloudflared (this pod)
+#           -> https://traefik.kube-system.svc:443 (validated against the
+#              Let's Encrypt cert, using per-hostname SNI)
+#           -> the app
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: cloudflare
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.7.1
+          args:
+            - tunnel
+            - --no-autoupdate
+            - --metrics
+            - 0.0.0.0:2000
+            - run
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: tunnel-credentials
+                  key: token
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop: ["ALL"]

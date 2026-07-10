@@ -1,0 +1,13 @@
+# Scoped to the production hostnames only. See apps/dev/certificate.yaml.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: prod-cartyx
+spec:
+  secretName: prod-cartyx-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - "app.cartyx.io"
+    - "ws.cartyx.io"

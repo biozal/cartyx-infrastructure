@@ -1,0 +1,6 @@
+# Never commit credentials. Secrets are created out-of-band; see README.
+secrets/
+*.key
+*.pem
+*-token
+kubeconfig

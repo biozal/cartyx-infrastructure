@@ -1,0 +1,14 @@
+# Scoped to the dev hostnames only. A wildcard key here would also be valid for
+# app.cartyx.io, letting a compromised dev workload impersonate production.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dev-cartyx
+spec:
+  secretName: dev-cartyx-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - "dev.cartyx.io"
+    - "dev-ws.cartyx.io"
