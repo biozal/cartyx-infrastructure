@@ -1,0 +1,25 @@
+---
+# Chart sources: the app repo's deploy/charts/cartyx, tracked per branch so
+# chart changes flow with the same merge that ships the code (dev branch ->
+# dev namespace, main -> prod). Public repo: no credentials.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: cartyx-app-dev
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/biozal/cartyx-app
+  ref:
+    branch: dev
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: cartyx-app-main
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/biozal/cartyx-app
+  ref:
+    branch: main

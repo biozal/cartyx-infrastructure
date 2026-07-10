@@ -10,6 +10,7 @@ Kubernetes Secrets created out-of-band:
 | `cloudflare-api-token` | `cert-manager` | `kubectl create secret` (see k3s-setup/README.md) |
 | `tunnel-credentials` | `cloudflare` | fetched from the Cloudflare API |
 | `*-tls` | `dev`, `prod` | issued automatically by cert-manager |
+| `cartyx` | `dev`, `prod` | `kubectl create secret generic cartyx ...` (see cartyx-app: deploy/charts/cartyx/README.md) |
 
 Manifests reference those Secrets **by name**. Flux will happily apply a
 Deployment whose Secret does not exist yet -- the pod simply stays in
@@ -38,9 +39,11 @@ solving here.
 
 ## Deploying a new version
 
-Push a new image tag to `ghcr.io`, update the `image:` field here, commit.
-Flux reconciles within a minute. Nothing needs cluster credentials, and CI never
-talks to the API server -- it only pushes to the registry and to this repo.
+Merges to cartyx-app's `dev`/`main` do this automatically: its deploy workflow
+pushes images to ghcr.io and commits the new tags to `apps/*/helmrelease.yaml`
+here (anchored on the `# ci:web-tag` / `# ci:realtime-tag` comments). Flux
+reconciles within a minute. Manual version pin: edit those same lines and
+commit.
 
 ## Certificates
 

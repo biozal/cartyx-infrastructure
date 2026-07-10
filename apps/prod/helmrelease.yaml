@@ -1,0 +1,29 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cartyx
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: deploy/charts/cartyx
+      # Revision strategy: repackage the chart on every commit to the branch
+      # (the chart version stays 0.1.0; without this, only version bumps
+      # would redeploy template changes).
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: cartyx-app-main
+        namespace: flux-system
+      valuesFiles:
+        - deploy/charts/cartyx/values.yaml
+        - deploy/charts/cartyx/values-prod.yaml
+  # Image tags only — everything else lives in the chart's values files.
+  # CI (cartyx-app deploy.yml) seds these lines by their marker comments.
+  values:
+    web:
+      image:
+        tag: prod-0000000 # ci:web-tag
+    realtime:
+      image:
+        tag: '0000000' # ci:realtime-tag
