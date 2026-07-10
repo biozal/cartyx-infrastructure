@@ -4,3 +4,4 @@ resources:
   - namespaces.yaml
   - clusterissuers.yaml
   - cloudflared.yaml
+  - headlamp.yaml
