@@ -3,6 +3,4 @@ kind: Kustomization
 namespace: prod
 resources:
   - certificate.yaml
-  - web.yaml
-  - ws.yaml
-  - ingress.yaml
+  - helmrelease.yaml
