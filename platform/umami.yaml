@@ -11,6 +11,10 @@
 # Image pinned to `3.2.0` (not a `postgresql-vX.Y.Z` tag — as of Umami v3, the plain
 # version tag *is* the postgresql image; verified its digest matches `postgresql-latest`
 # via the ghcr.io manifest API on 2026-07-11). `mysql-latest` is a distinct image/digest.
+#
+# Memory limit raised to 512Mi (from the brief's 256Mi): the Next.js 16 server OOMKilled
+# (exit 137) at 256Mi within ~1 minute of serving traffic. Node has ample headroom (14%
+# memory allocated cluster-wide), so this is a safe bump.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,8 +38,8 @@ spec:
             - name: APP_SECRET
               valueFrom: { secretKeyRef: { name: platform, key: umami-app-secret } }
           resources:
-            requests: { cpu: 50m, memory: 128Mi }
-            limits: { memory: 256Mi }
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 512Mi }
           readinessProbe:
             httpGet: { path: /api/heartbeat, port: 3000 }
             initialDelaySeconds: 10
