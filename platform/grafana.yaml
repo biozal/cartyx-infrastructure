@@ -1,0 +1,80 @@
+# HelmRepository `grafana` is defined in alloy.yaml (Task 5) — not redefined here.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: grafana
+  namespace: platform
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: grafana
+      version: '10.5.15' # PINNED via: helm search repo grafana/grafana --versions
+      sourceRef: { kind: HelmRepository, name: grafana }
+  values:
+    fullnameOverride: grafana
+    admin:
+      existingSecret: grafana-admin
+      userKey: admin-user
+      passwordKey: admin-password
+    envFromSecret: platform # exposes DISCORD_WEBHOOK_URL, GRAFANA_RO_PASSWORD etc. as env
+    plugins:
+      - victoriametrics-logs-datasource
+    grafana.ini:
+      server:
+        root_url: https://grafana.cartyx.io
+      plugins:
+        allow_loading_unsigned_plugins: victoriametrics-logs-datasource
+      analytics:
+        reporting_enabled: false
+    datasources:
+      datasources.yaml:
+        apiVersion: 1
+        datasources:
+          - name: VictoriaMetrics
+            uid: victoriametrics
+            type: prometheus
+            access: proxy
+            url: http://victoriametrics-server.platform.svc:8428
+            isDefault: true
+          - name: VictoriaLogs
+            uid: victorialogs
+            type: victoriametrics-logs-datasource
+            access: proxy
+            url: http://victorialogs-server.platform.svc:9428
+          - name: Umami DB
+            uid: umami-db
+            type: postgres
+            access: proxy
+            url: postgres.platform.svc:5432
+            database: umami
+            user: grafana_ro
+            secureJsonData:
+              password: $GRAFANA_RO_PASSWORD
+            jsonData: { sslmode: disable }
+          - name: GlitchTip DB
+            uid: glitchtip-db
+            type: postgres
+            access: proxy
+            url: postgres.platform.svc:5432
+            database: glitchtip
+            user: grafana_ro
+            secureJsonData:
+              password: $GRAFANA_RO_PASSWORD
+            jsonData: { sslmode: disable }
+    ingress:
+      enabled: true
+      ingressClassName: traefik
+      annotations:
+        traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        traefik.ingress.kubernetes.io/router.tls: 'true'
+      hosts: [grafana.cartyx.io]
+      tls:
+        - secretName: platform-cartyx-tls
+          hosts: [grafana.cartyx.io]
+    persistence:
+      enabled: true
+      size: 2Gi
+    resources:
+      requests: { cpu: 50m, memory: 192Mi }
+      limits: { memory: 384Mi }
