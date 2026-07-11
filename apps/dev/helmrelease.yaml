@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: dev-aa6701e # ci:web-tag
+        tag: dev-798af51 # ci:web-tag
     realtime:
       image:
-        tag: 'aa6701e' # ci:realtime-tag
+        tag: '798af51' # ci:realtime-tag
