@@ -1,0 +1,24 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: victoriametrics
+  namespace: platform
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: victoria-metrics-single
+      version: '0.42.0'
+      sourceRef: { kind: HelmRepository, name: victoriametrics }
+  values:
+    server:
+      # fullnameOverride includes the "-server" suffix so the rendered Service
+      # name is victoriametrics-server (required by later tasks), not victoriametrics.
+      fullnameOverride: victoriametrics-server
+      retentionPeriod: 1 # months; VM single takes months here — 1 month ≈ the 30d target
+      persistentVolume:
+        enabled: true
+        size: 10Gi
+      resources:
+        requests: { cpu: 50m, memory: 128Mi }
+        limits: { memory: 384Mi }
