@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: prod-0000000 # ci:web-tag
+        tag: prod-094acbb # ci:web-tag
     realtime:
       image:
-        tag: '0000000' # ci:realtime-tag
+        tag: '094acbb' # ci:realtime-tag
