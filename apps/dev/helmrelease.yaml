@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: dev-a4d7172 # ci:web-tag
+        tag: dev-1c4c5ec # ci:web-tag
     realtime:
       image:
-        tag: 'a4d7172' # ci:realtime-tag
+        tag: '1c4c5ec' # ci:realtime-tag
