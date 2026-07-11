@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: prod-094acbb # ci:web-tag
+        tag: prod-c613fca # ci:web-tag
     realtime:
       image:
-        tag: '094acbb' # ci:realtime-tag
+        tag: 'c613fca' # ci:realtime-tag
