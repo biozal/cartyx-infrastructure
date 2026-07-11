@@ -7,6 +7,8 @@ data:
   init.sh: |
     #!/bin/bash
     set -e
+    # Passwords are interpolated straight into SQL string literals below with no
+    # escaping — generated passwords MUST stay hex-only (no quotes/backslashes).
     printf '%s\n' \
       "CREATE USER umami WITH PASSWORD '$UMAMI_DB_PASSWORD';" \
       "CREATE DATABASE umami OWNER umami;" \

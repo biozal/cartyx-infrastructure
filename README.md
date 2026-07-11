@@ -107,7 +107,26 @@ Deployment/StatefulSet to pick it up.
   chart defaults with no error -- this has happened once already.
 - Alert rules need `noDataState: OK` -- an empty vector means "nothing to
   report," not "unhealthy."
-- Grafana's Deployment uses an RWO PVC with a `RollingUpdate` strategy, which
-  races on redeploy (new pod can't mount while the old one still holds the
-  volume). If it sticks, scale to 0 then back to 1. Proper fix is switching
-  the strategy to `Recreate`.
+- Grafana's Deployment uses an RWO PVC, so it's pinned to
+  `deploymentStrategy.type: Recreate` (old pod is torn down before the new
+  one mounts the volume) -- a `RollingUpdate` here races two pods for the
+  same volume and can wedge the rollout.
+- k3s' `local-path` storage class enforces **no PVC quotas** -- the
+  10Gi/20Gi/10Gi/2Gi `storage:` requests on postgres/victoriametrics/
+  victorialogs/grafana are decorative sizing hints, not enforced caps; a
+  volume can grow past its declared size and fill the node disk. The
+  `pvc-near-full` alert in grafana.yaml actually measures node root
+  filesystem usage (`kubelet_volume_stats_*`), not true per-PVC usage --
+  follow-up: switch it to `vl_data_size_bytes` / `vm_data_size_bytes` once
+  VictoriaLogs/VictoriaMetrics expose per-volume size metrics.
+- LogsQL free-text queries (e.g. `namespace:prod`) match anywhere in the log
+  body, including JSON-unpacked fields nested inside *other* pods' log
+  lines -- a free-text term is not scoped to the `namespace` stream field
+  unless you use an exact stream selector (e.g. `{namespace="prod"}`).
+- Platform Postgres (and all platform PVCs) have **no backup** -- this is an
+  accepted homelab risk, not an oversight. Losing the `postgres` PVC means
+  losing Umami/GlitchTip/Grafana data with no recovery path.
+- `postgres-initdb`'s `init.sh` interpolates DB passwords directly into SQL
+  string literals with no quoting/escaping (see platform/postgres.yaml).
+  Generated passwords must stay hex-only -- a password containing a `'` or
+  `\` breaks initdb.
