@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - postgres.yaml
+  - postgres-backup.yaml
   - victorialogs.yaml
   - victoriametrics.yaml
   - kube-state-metrics.yaml

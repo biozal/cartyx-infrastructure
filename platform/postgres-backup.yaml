@@ -1,0 +1,60 @@
+# Nightly Postgres backup -> R2, gzipped. suspend: true until the
+# `platform-backup` Secret exists (see README: "Postgres backups" for how
+# to create the R2 bucket, API token, and Secret, then flip suspend to
+# false).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: platform
+spec:
+  schedule: '0 3 * * *'
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: postgres-backup
+              image: postgres:17-alpine
+              # postgres:17-alpine has pg_dump/gzip but not curl -- install it
+              # at job start (curl >=7.75 supports --aws-sigv4; apk's build is
+              # well past that, verified 8.21.0).
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  apk add --no-cache curl >/dev/null
+                  for db in umami glitchtip; do
+                    file="${db}-$(date +%F).sql.gz"
+                    echo "dumping $db -> $file"
+                    pg_dump -h postgres.platform.svc -U postgres "$db" | gzip > "/tmp/$file"
+                    echo "uploading $file"
+                    curl --fail --silent --show-error \
+                      --aws-sigv4 "aws:amz:auto:s3" \
+                      --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
+                      -T "/tmp/$file" \
+                      "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}/postgres/$file"
+                    rm -f "/tmp/$file"
+                  done
+                  echo "backup complete"
+              env:
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: platform, key: postgres-password } }
+                - name: R2_ACCOUNT_ID
+                  valueFrom: { secretKeyRef: { name: platform-backup, key: R2_ACCOUNT_ID } }
+                - name: R2_BUCKET
+                  valueFrom: { secretKeyRef: { name: platform-backup, key: R2_BUCKET } }
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom: { secretKeyRef: { name: platform-backup, key: AWS_ACCESS_KEY_ID } }
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom: { secretKeyRef: { name: platform-backup, key: AWS_SECRET_ACCESS_KEY } }
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { memory: 256Mi }

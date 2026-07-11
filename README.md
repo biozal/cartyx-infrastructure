@@ -100,6 +100,47 @@ Deployment/StatefulSet to pick it up.
   updating the secret key to match. Grafana is the exception: its chart reads
   `grafana-admin` directly, so a secret patch + rollout restart rotates it.
 
+### Postgres backups
+
+`platform/postgres-backup.yaml` is a nightly (`0 3 * * *`) CronJob that
+`pg_dump`s both `umami` and `glitchtip`, gzips them, and uploads to a
+private Cloudflare R2 bucket via curl's `--aws-sigv4`. It ships
+**`suspend: true`** because it reads a Secret that doesn't exist in Git
+(same out-of-band pattern as every other Secret in this repo) -- until
+you create it, the CronJob exists but never fires.
+
+Retention/expiry is not the CronJob's job: set an R2 lifecycle rule on
+the bucket (Cloudflare dashboard -> bucket -> Lifecycle Rules) to expire
+objects under `postgres/` after however long you want backups kept.
+
+To enable it:
+
+1. In the Cloudflare dashboard, create a private R2 bucket named
+   `cartyx-backups`.
+2. R2 -> Manage API Tokens -> create a token scoped to that bucket with
+   Object Read & Write permission. Note the Access Key ID, Secret Access
+   Key, and your R2 account ID.
+3. Create the Secret:
+   ```
+   kubectl create secret generic platform-backup -n platform \
+     --from-literal=R2_ACCOUNT_ID=<account-id> \
+     --from-literal=R2_BUCKET=cartyx-backups \
+     --from-literal=AWS_ACCESS_KEY_ID=<access-key-id> \
+     --from-literal=AWS_SECRET_ACCESS_KEY=<secret-access-key>
+   ```
+4. Flip `suspend: true` -> `false` in `platform/postgres-backup.yaml` and
+   commit.
+5. Trigger a one-off test run without waiting for 3am:
+   ```
+   kubectl create job --from=cronjob/postgres-backup test-backup -n platform
+   kubectl logs -n platform -l job-name=test-backup -f
+   ```
+6. Restore a dump (against a scratch database, not the live one, unless
+   that's really what you want):
+   ```
+   gunzip -c umami-2026-07-11.sql.gz | psql -h postgres.platform.svc -U postgres -d umami_restore_test
+   ```
+
 ### Gotchas
 
 - Alloy's config **must** stay nested under `alloy:` in the HelmRelease
@@ -126,9 +167,12 @@ Deployment/StatefulSet to pick it up.
   body, including JSON-unpacked fields nested inside *other* pods' log
   lines -- a free-text term is not scoped to the `namespace` stream field
   unless you use an exact stream selector (e.g. `{namespace="prod"}`).
-- Platform Postgres (and all platform PVCs) have **no backup** -- this is an
-  accepted homelab risk, not an oversight. Losing the `postgres` PVC means
-  losing Umami/GlitchTip/Grafana data with no recovery path.
+- Platform Postgres has a nightly backup CronJob
+  (`platform/postgres-backup.yaml`, see "Postgres backups" above) but it
+  ships `suspend: true` until the `platform-backup` Secret is created --
+  until then it's still an accepted homelab risk. Grafana's PVC (dashboards
+  provisioned from Git, so low-value) and the VictoriaMetrics/VictoriaLogs
+  PVCs (rebuildable observability data) remain unbacked-up by design.
 - `postgres-initdb`'s `init.sh` interpolates DB passwords directly into SQL
   string literals with no quoting/escaping (see platform/postgres.yaml).
   Generated passwords must stay hex-only -- a password containing a `'` or
