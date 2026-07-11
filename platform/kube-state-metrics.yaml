@@ -1,0 +1,26 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: prometheus-community
+  namespace: platform
+spec:
+  interval: 1h
+  url: https://prometheus-community.github.io/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-state-metrics
+  namespace: platform
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: kube-state-metrics
+      version: '7.8.1'
+      sourceRef: { kind: HelmRepository, name: prometheus-community }
+  values:
+    fullnameOverride: kube-state-metrics
+    resources:
+      requests: { cpu: 20m, memory: 48Mi }
+      limits: { memory: 96Mi }

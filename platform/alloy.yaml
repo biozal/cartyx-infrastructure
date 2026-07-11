@@ -1,0 +1,93 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: grafana
+  namespace: platform
+spec:
+  interval: 1h
+  url: https://grafana.github.io/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: alloy
+  namespace: platform
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: alloy
+      version: '1.10.1'
+      sourceRef: { kind: HelmRepository, name: grafana }
+  values:
+    alloy:
+      resources:
+        requests: { cpu: 50m, memory: 128Mi }
+        limits: { memory: 256Mi }
+      configMap:
+        content: |
+          logging { level = "warn" }
+
+          // ---- logs: every pod on the node -> VictoriaLogs (Loki-compatible) ----
+          discovery.kubernetes "pods" { role = "pod" }
+
+          discovery.relabel "pod_logs" {
+            targets = discovery.kubernetes.pods.targets
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_container_name"]
+              target_label  = "container"
+            }
+          }
+
+          loki.source.kubernetes "pods" {
+            targets    = discovery.relabel.pod_logs.output
+            forward_to = [loki.write.victorialogs.receiver]
+          }
+
+          loki.write "victorialogs" {
+            endpoint {
+              url = "http://victorialogs-server.platform.svc:9428/insert/loki/api/v1/push?_stream_fields=namespace,pod,container"
+            }
+          }
+
+          // ---- metrics: kubelet + cAdvisor + kube-state-metrics -> VictoriaMetrics ----
+          discovery.kubernetes "nodes" { role = "node" }
+
+          prometheus.scrape "kubelet" {
+            targets           = discovery.kubernetes.nodes.targets
+            scheme            = "https"
+            bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+            tls_config { insecure_skip_verify = true }
+            forward_to = [prometheus.remote_write.vm.receiver]
+          }
+
+          prometheus.scrape "cadvisor" {
+            targets           = discovery.kubernetes.nodes.targets
+            scheme            = "https"
+            metrics_path      = "/metrics/cadvisor"
+            bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+            tls_config { insecure_skip_verify = true }
+            forward_to = [prometheus.remote_write.vm.receiver]
+          }
+
+          prometheus.scrape "kube_state_metrics" {
+            targets = [{ __address__ = "kube-state-metrics.platform.svc:8080" }]
+            forward_to = [prometheus.remote_write.vm.receiver]
+          }
+
+          prometheus.scrape "victorialogs" {
+            targets = [{ __address__ = "victorialogs-server.platform.svc:9428" }]
+            forward_to = [prometheus.remote_write.vm.receiver]
+          }
+
+          prometheus.remote_write "vm" {
+            endpoint { url = "http://victoriametrics-server.platform.svc:8428/api/v1/write" }
+          }

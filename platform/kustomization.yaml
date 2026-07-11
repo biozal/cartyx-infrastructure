@@ -5,3 +5,5 @@ resources:
   - postgres.yaml
   - victorialogs.yaml
   - victoriametrics.yaml
+  - kube-state-metrics.yaml
+  - alloy.yaml
