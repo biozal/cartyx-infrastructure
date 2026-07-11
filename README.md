@@ -94,6 +94,11 @@ Deployment/StatefulSet to pick it up.
   the `platform` secret.
 - Umami admin password: `platform` secret.
 - Grafana admin credentials: `grafana-admin` secret.
+- Note: the GlitchTip/Umami admin-password keys are record-keeping only --
+  both accounts were bootstrapped by hand (CLI/API) and no manifest consumes
+  those keys. Rotating them means changing the password in the app *and*
+  updating the secret key to match. Grafana is the exception: its chart reads
+  `grafana-admin` directly, so a secret patch + rollout restart rotates it.
 
 ### Gotchas
 
