@@ -9,3 +9,4 @@ resources:
   - alloy.yaml
   - certificate.yaml
   - grafana.yaml
+  - glitchtip.yaml

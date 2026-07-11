@@ -1,0 +1,62 @@
+# Chart 9.0.0 dropped the env.secret / env.normal / web / worker value shapes used by
+# older GlitchTip charts (see templates/_helpers.tpl validateValues). The worker is now
+# always embedded in the web ASGI process (no separate worker deployment), and secrets are
+# wired via glitchtip.existingSecret / glitchtip.database.existingSecret pointing at native
+# secretKeyRef lookups — so no Flux valuesFrom targetPath is needed here at all: we just
+# reference the existing `platform` Secret by name and the exact key within it.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: glitchtip
+  namespace: platform
+spec:
+  interval: 1h
+  url: https://gitlab.com/api/v4/projects/16325141/packages/helm/stable
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: glitchtip
+  namespace: platform
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: glitchtip
+      version: '9.0.0' # PINNED via: helm search repo glitchtip --versions
+      sourceRef: { kind: HelmRepository, name: glitchtip }
+  values:
+    glitchtip:
+      existingSecret: platform
+      existingSecretKey: glitchtip-secret-key
+      domain: https://glitchtip.cartyx.io
+      database:
+        existingSecret: platform
+        existingSecretKey: glitchtip-database-url
+    extraEnvVars:
+      - name: ENABLE_USER_REGISTRATION
+        value: 'False'
+      - name: ENABLE_ORGANIZATION_CREATION
+        value: 'False'
+    postgresql: { enabled: false }
+    valkey:
+      enabled: true
+      resources:
+        requests: { cpu: 50m, memory: 128Mi }
+        limits: { memory: 256Mi }
+    replicaCount: 1
+    resources:
+      requests: { cpu: 100m, memory: 320Mi }
+      limits: { memory: 640Mi }
+    ingress:
+      enabled: true
+      className: traefik
+      annotations:
+        traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        traefik.ingress.kubernetes.io/router.tls: 'true'
+      hosts:
+        - host: glitchtip.cartyx.io
+          paths: [{ path: /, pathType: Prefix }]
+      tls:
+        - secretName: platform-cartyx-tls
+          hosts: [glitchtip.cartyx.io]
