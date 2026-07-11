@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: dev-f22e762 # ci:web-tag
+        tag: dev-ed45a74 # ci:web-tag
     realtime:
       image:
-        tag: 'f22e762' # ci:realtime-tag
+        tag: 'ed45a74' # ci:realtime-tag
