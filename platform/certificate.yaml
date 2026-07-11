@@ -1,0 +1,16 @@
+# One cert for the three platform hostnames. Scoped like apps/*/certificate.yaml
+# (per-purpose certs; the repo forbids a shared wildcard).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: platform-cartyx
+  namespace: platform
+spec:
+  secretName: platform-cartyx-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - "grafana.cartyx.io"
+    - "glitchtip.cartyx.io"
+    - "umami.cartyx.io"
