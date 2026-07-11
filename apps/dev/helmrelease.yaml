@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: dev-fcbe11f # ci:web-tag
+        tag: dev-148965c # ci:web-tag
     realtime:
       image:
-        tag: 'fcbe11f' # ci:realtime-tag
+        tag: '148965c' # ci:realtime-tag
