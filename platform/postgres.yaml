@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  namespace: platform
+data:
+  init.sh: |
+    #!/bin/bash
+    set -e
+    psql -v ON_ERROR_STOP=1 -U postgres <<-EOSQL
+      CREATE USER umami WITH PASSWORD '$UMAMI_DB_PASSWORD';
+      CREATE DATABASE umami OWNER umami;
+      CREATE USER glitchtip WITH PASSWORD '$GLITCHTIP_DB_PASSWORD';
+      CREATE DATABASE glitchtip OWNER glitchtip;
+      CREATE USER grafana_ro WITH PASSWORD '$GRAFANA_RO_PASSWORD';
+      GRANT CONNECT ON DATABASE umami TO grafana_ro;
+      GRANT CONNECT ON DATABASE glitchtip TO grafana_ro;
+    EOSQL
+    for db in umami glitchtip; do
+      psql -v ON_ERROR_STOP=1 -U postgres -d "$db" <<-EOSQL
+        GRANT USAGE ON SCHEMA public TO grafana_ro;
+        ALTER DEFAULT PRIVILEGES FOR ROLE $db IN SCHEMA public GRANT SELECT ON TABLES TO grafana_ro;
+      EOSQL
+    done
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: platform
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: platform
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: platform, key: postgres-password } }
+            - name: UMAMI_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: platform, key: umami-db-password } }
+            - name: GLITCHTIP_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: platform, key: glitchtip-db-password } }
+            - name: GRAFANA_RO_PASSWORD
+              valueFrom: { secretKeyRef: { name: platform, key: grafana-ro-password } }
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 256Mi }
+          readinessProbe:
+            exec: { command: ['pg_isready', '-U', 'postgres'] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: initdb
+          configMap: { name: postgres-initdb }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ['ReadWriteOnce']
+        resources: { requests: { storage: 10Gi } }
