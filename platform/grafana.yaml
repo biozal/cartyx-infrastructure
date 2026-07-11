@@ -165,6 +165,8 @@ spec:
                 title: Pod crash-looping
                 condition: A
                 for: 10m
+                noDataState: OK
+                execErrState: Error
                 data:
                   - refId: A
                     relativeTimeRange: { from: 900, to: 0 }
@@ -176,6 +178,8 @@ spec:
                 title: Container memory > 90% of limit
                 condition: A
                 for: 15m
+                noDataState: OK
+                execErrState: Error
                 data:
                   - refId: A
                     relativeTimeRange: { from: 900, to: 0 }
@@ -187,6 +191,8 @@ spec:
                 title: PVC > 80% full
                 condition: A
                 for: 30m
+                noDataState: OK
+                execErrState: Error
                 data:
                   - refId: A
                     relativeTimeRange: { from: 900, to: 0 }
@@ -198,6 +204,8 @@ spec:
                 title: Log pipeline silent 15m
                 condition: A
                 for: 0m
+                noDataState: OK
+                execErrState: Error
                 data:
                   - refId: A
                     relativeTimeRange: { from: 900, to: 0 }
