@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: dev-2f02626 # ci:web-tag
+        tag: dev-6303cc0 # ci:web-tag
     realtime:
       image:
-        tag: '2f02626' # ci:realtime-tag
+        tag: '6303cc0' # ci:realtime-tag
