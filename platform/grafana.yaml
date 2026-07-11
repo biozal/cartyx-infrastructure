@@ -140,6 +140,11 @@ spec:
       requests: { cpu: 50m, memory: 192Mi }
       limits: { memory: 384Mi }
     alerting:
+      deleterules.yaml:
+        apiVersion: 1
+        deleteRules:
+          - orgId: 1
+            uid: pvc-near-full
       contactpoints.yaml:
         apiVersion: 1
         contactPoints:
