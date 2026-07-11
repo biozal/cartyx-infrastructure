@@ -10,3 +10,4 @@ resources:
   - certificate.yaml
   - grafana.yaml
   - glitchtip.yaml
+  - umami.yaml

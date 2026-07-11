@@ -1,0 +1,72 @@
+# Fallback plain manifests (not the christianhuth/umami chart). The chart maps
+# DATABASE_URL cleanly via database.existingSecret + database.databaseUrlKey, but
+# APP_SECRET is hardcoded to read key `app-secret` from umami.appSecret.existingSecret
+# (see templates/_helpers.tpl `umami.appSecret.secretName`, deployment.yaml key: app-secret)
+# — not configurable. Our `platform` Secret stores it under `umami-app-secret`, so making
+# the chart work would mean duplicating the secret value under a second key. Per the
+# Task 8 lesson (chart-native existingSecret beats valuesFrom targetPath, but only when
+# it's actually clean), we use the brief's fallback manifests here instead: both env vars
+# reference the existing `platform` Secret's real keys directly, no copying required.
+#
+# Image pinned to `3.2.0` (not a `postgresql-vX.Y.Z` tag — as of Umami v3, the plain
+# version tag *is* the postgresql image; verified its digest matches `postgresql-latest`
+# via the ghcr.io manifest API on 2026-07-11). `mysql-latest` is a distinct image/digest.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: umami
+  namespace: platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: umami }
+  template:
+    metadata:
+      labels: { app: umami }
+    spec:
+      containers:
+        - name: umami
+          image: ghcr.io/umami-software/umami:3.2.0
+          ports: [{ containerPort: 3000 }]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: platform, key: umami-database-url } }
+            - name: APP_SECRET
+              valueFrom: { secretKeyRef: { name: platform, key: umami-app-secret } }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 256Mi }
+          readinessProbe:
+            httpGet: { path: /api/heartbeat, port: 3000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: umami
+  namespace: platform
+spec:
+  selector: { app: umami }
+  ports: [{ port: 3000 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: umami
+  namespace: platform
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: 'true'
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [umami.cartyx.io]
+      secretName: platform-cartyx-tls
+  rules:
+    - host: umami.cartyx.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: umami, port: { number: 3000 } } }
