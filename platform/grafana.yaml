@@ -62,6 +62,65 @@ spec:
             secureJsonData:
               password: $GRAFANA_RO_PASSWORD
             jsonData: { sslmode: disable }
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: default
+            folder: ''
+            type: file
+            options: { path: /var/lib/grafana/dashboards/default }
+    dashboards:
+      default:
+        k8s-global:
+          gnetId: 15757 # "Kubernetes / Views / Global" (dotdc)
+          revision: 43
+          datasource: VictoriaMetrics
+        k8s-pods:
+          gnetId: 15760 # "Kubernetes / Views / Pods" (dotdc)
+          revision: 39
+          datasource: VictoriaMetrics
+        cartyx-product:
+          json: |
+            {
+              "schemaVersion": 39,
+              "title": "Cartyx Product",
+              "uid": "cartyx-product",
+              "editable": true,
+              "time": { "from": "now-24h", "to": "now" },
+              "panels": [
+                {
+                  "id": 1,
+                  "type": "stat",
+                  "title": "Events (24h)",
+                  "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+                  "datasource": { "type": "postgres", "uid": "umami-db" },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "datasource": { "type": "postgres", "uid": "umami-db" },
+                      "rawSql": "SELECT count(*) FROM website_event WHERE created_at > now() - interval '24 hours';",
+                      "format": "table"
+                    }
+                  ]
+                },
+                {
+                  "id": 2,
+                  "type": "stat",
+                  "title": "Active error groups (24h)",
+                  "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+                  "datasource": { "type": "postgres", "uid": "glitchtip-db" },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "datasource": { "type": "postgres", "uid": "glitchtip-db" },
+                      "rawSql": "SELECT count(*) FROM issue_events_issue WHERE first_seen > now() - interval '24 hours';",
+                      "format": "table"
+                    }
+                  ]
+                }
+              ]
+            }
     ingress:
       enabled: true
       ingressClassName: traefik
@@ -78,3 +137,71 @@ spec:
     resources:
       requests: { cpu: 50m, memory: 192Mi }
       limits: { memory: 384Mi }
+    alerting:
+      contactpoints.yaml:
+        apiVersion: 1
+        contactPoints:
+          - orgId: 1
+            name: discord
+            receivers:
+              - uid: discord-main
+                type: discord
+                settings:
+                  url: $DISCORD_WEBHOOK_URL
+      policies.yaml:
+        apiVersion: 1
+        policies:
+          - orgId: 1
+            receiver: discord
+      rules.yaml:
+        apiVersion: 1
+        groups:
+          - orgId: 1
+            name: platform
+            folder: Alerts
+            interval: 5m
+            rules:
+              - uid: pod-crashloop
+                title: Pod crash-looping
+                condition: A
+                for: 10m
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
+                      instant: true
+              - uid: mem-near-limit
+                title: Container memory > 90% of limit
+                condition: A
+                for: 15m
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: max by (namespace, pod, container) (container_memory_working_set_bytes) / max by (namespace, pod, container) (kube_pod_container_resource_limits{resource="memory"}) > 0.9
+                      instant: true
+              - uid: pvc-near-full
+                title: PVC > 80% full
+                condition: A
+                for: 30m
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes > 0.8
+                      instant: true
+              - uid: logs-silent
+                title: Log pipeline silent 15m
+                condition: A
+                for: 0m
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: absent(vl_rows_ingested_total) or (sum(increase(vl_rows_ingested_total[15m])) == 0)
+                      instant: true
