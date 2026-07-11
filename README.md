@@ -114,11 +114,14 @@ Deployment/StatefulSet to pick it up.
 - k3s' `local-path` storage class enforces **no PVC quotas** -- the
   10Gi/20Gi/10Gi/2Gi `storage:` requests on postgres/victoriametrics/
   victorialogs/grafana are decorative sizing hints, not enforced caps; a
-  volume can grow past its declared size and fill the node disk. The
-  `pvc-near-full` alert in grafana.yaml actually measures node root
-  filesystem usage (`kubelet_volume_stats_*`), not true per-PVC usage --
-  follow-up: switch it to `vl_data_size_bytes` / `vm_data_size_bytes` once
-  VictoriaLogs/VictoriaMetrics expose per-volume size metrics.
+  volume can grow past its declared size and fill the node disk. Store
+  usage is alerted directly via each store's self-reported size:
+  `store-size-vl` (`sum(vl_data_size_bytes) > 16GiB`) and `store-size-vm`
+  (`sum(vm_data_size_bytes) > 8GiB`) in grafana.yaml, fed by an Alloy
+  self-scrape of `victoriametrics-server:8428` added in alloy.yaml. A
+  separate `node-disk` rule keeps the old `kubelet_volume_stats_*`
+  root-filesystem check (renamed to be honest about what it measures),
+  raised to > 85%.
 - LogsQL free-text queries (e.g. `namespace:prod`) match anywhere in the log
   body, including JSON-unpacked fields nested inside *other* pods' log
   lines -- a free-text term is not scoped to the `namespace` stream field

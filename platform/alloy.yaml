@@ -88,6 +88,11 @@ spec:
             forward_to = [prometheus.remote_write.vm.receiver]
           }
 
+          prometheus.scrape "victoriametrics" {
+            targets = [{ __address__ = "victoriametrics-server.platform.svc:8428" }]
+            forward_to = [prometheus.remote_write.vm.receiver]
+          }
+
           prometheus.remote_write "vm" {
             endpoint { url = "http://victoriametrics-server.platform.svc:8428/api/v1/write" }
           }

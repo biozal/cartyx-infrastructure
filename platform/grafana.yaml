@@ -189,8 +189,8 @@ spec:
                     model:
                       expr: max by (namespace, pod, container) (container_memory_working_set_bytes) / max by (namespace, pod, container) (kube_pod_container_resource_limits{resource="memory"}) > 0.9
                       instant: true
-              - uid: pvc-near-full
-                title: PVC > 80% full
+              - uid: store-size-vl
+                title: VictoriaLogs store size > 16GiB
                 condition: A
                 for: 30m
                 noDataState: OK
@@ -200,7 +200,33 @@ spec:
                     relativeTimeRange: { from: 900, to: 0 }
                     datasourceUid: victoriametrics
                     model:
-                      expr: kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes > 0.8
+                      expr: sum(vl_data_size_bytes) > 17179869184
+                      instant: true
+              - uid: store-size-vm
+                title: VictoriaMetrics store size > 8GiB
+                condition: A
+                for: 30m
+                noDataState: OK
+                execErrState: Error
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: sum(vm_data_size_bytes) > 8589934592
+                      instant: true
+              - uid: node-disk
+                title: Node root filesystem > 85% full
+                condition: A
+                for: 30m
+                noDataState: OK
+                execErrState: Error
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes > 0.85
                       instant: true
               - uid: logs-silent
                 title: Log pipeline silent 15m
