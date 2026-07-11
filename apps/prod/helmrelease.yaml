@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: prod-9e93264 # ci:web-tag
+        tag: prod-0a53685 # ci:web-tag
     realtime:
       image:
-        tag: '9e93264' # ci:realtime-tag
+        tag: '0a53685' # ci:realtime-tag
