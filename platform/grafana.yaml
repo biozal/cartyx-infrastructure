@@ -13,6 +13,8 @@ spec:
       sourceRef: { kind: HelmRepository, name: grafana }
   values:
     fullnameOverride: grafana
+    deploymentStrategy:
+      type: Recreate # RWO PVC: RollingUpdate races two pods for the same volume
     admin:
       existingSecret: grafana-admin
       userKey: admin-user
