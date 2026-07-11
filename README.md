@@ -49,3 +49,60 @@ commit.
 
 Per-environment, deliberately not a shared wildcard: the `dev` key is not valid
 for `app.cartyx.io`. Do not consolidate them.
+
+## Platform (observability)
+
+`platform/` -- one manifest file per component, all in the `platform`
+namespace:
+
+| Component | Notes |
+|---|---|
+| Postgres 17 | Plain StatefulSet (not the Helm chart). Databases: `umami`, `glitchtip`, plus a read-only `grafana_ro` role for Grafana's SQL datasources. |
+| VictoriaLogs | `victorialogs-server:9428`, 90d retention. |
+| VictoriaMetrics | `victoriametrics-server:8428`, ~30d retention. |
+| Alloy | Single collector: pod logs -> VictoriaLogs via `loki-push`; kubelet/cadvisor/kube-state-metrics/VL-self scrapes -> VictoriaMetrics via `remote-write`. |
+| kube-state-metrics | Feeds Alloy's scrape targets above. |
+| GlitchTip 9.0.0 | External Postgres, bundled Valkey. |
+| Umami 3.2.0 | Plain manifests, not the community chart -- it hardcodes the app secret key. |
+| Grafana 10.5.15 | 4 provisioned datasources with fixed uids (`victoriametrics`, `victorialogs`, `umami-db`, `glitchtip-db`), 3 dashboards, 4 alert rules routed to a Discord contact point. |
+
+This replaces the umbrella-chart approach originally sketched in cartyx-app's
+migration roadmap -- per-component HelmReleases (and, for Postgres/Umami,
+plain manifests) turned out easier to reason about than one chart with
+sub-chart dependencies.
+
+Hostnames: `grafana.cartyx.io`, `glitchtip.cartyx.io`, `umami.cartyx.io` --
+`public-hostname` entries on the tunnel plus proxied CNAMEs, one shared
+certificate `platform-cartyx-tls` issued via `letsencrypt-prod` (DNS01).
+
+### Secrets
+
+| Secret | Namespace | Contains |
+|---|---|---|
+| `platform` | `platform` | Postgres admin password; per-db passwords + connection URLs; GlitchTip `SECRET_KEY` + admin password (`glitchtip-admin-password`); Umami `APP_SECRET` + admin password (`umami-admin-password`); `grafana_ro` password, duplicated as env-safe `GRAFANA_RO_PASSWORD`; `DISCORD_WEBHOOK_URL` (currently the placeholder `pending`). |
+| `grafana-admin` | `platform` | Grafana admin credentials. |
+
+Both are created out-of-band, same as the Secrets in the table at the top of
+this doc. Rotation: `kubectl patch` the secret, then roll the affected
+Deployment/StatefulSet to pick it up.
+
+### Admin bootstrap
+
+- GlitchTip registration is off (`ENABLE_USER_REGISTRATION: False` in
+  `platform/glitchtip.yaml`) -- flip to `True` and let Flux reconcile to add
+  users, then flip back. Superuser is `alabeau@gmail.com`; password lives in
+  the `platform` secret.
+- Umami admin password: `platform` secret.
+- Grafana admin credentials: `grafana-admin` secret.
+
+### Gotchas
+
+- Alloy's config **must** stay nested under `alloy:` in the HelmRelease
+  values. A mis-nest is silently accepted and the whole pipeline reverts to
+  chart defaults with no error -- this has happened once already.
+- Alert rules need `noDataState: OK` -- an empty vector means "nothing to
+  report," not "unhealthy."
+- Grafana's Deployment uses an RWO PVC with a `RollingUpdate` strategy, which
+  races on redeploy (new pod can't mount while the old one still holds the
+  volume). If it sticks, scale to 0 then back to 1. Proper fix is switching
+  the strategy to `Recreate`.
