@@ -1,4 +1,4 @@
-# Nightly Postgres backup -> R2, gzipped. suspend: true until the
+# Nightly Postgres backup -> R2, gzipped. suspend: false until the
 # `platform-backup` Secret exists (see README: "Postgres backups" for how
 # to create the R2 bucket, API token, and Secret, then flip suspend to
 # false).
@@ -9,7 +9,7 @@ metadata:
   namespace: platform
 spec:
   schedule: '0 3 * * *'
-  suspend: true
+  suspend: false
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
