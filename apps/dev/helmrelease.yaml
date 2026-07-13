@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: dev-1727f5c # ci:web-tag
+        tag: dev-e2f3d61 # ci:web-tag
     realtime:
       image:
-        tag: '1727f5c' # ci:realtime-tag
+        tag: 'e2f3d61' # ci:realtime-tag
