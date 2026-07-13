@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: dev-38cb229 # ci:web-tag
+        tag: dev-e625571 # ci:web-tag
     realtime:
       image:
-        tag: '38cb229' # ci:realtime-tag
+        tag: 'e625571' # ci:realtime-tag
