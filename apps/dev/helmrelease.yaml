@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: dev-e310f56 # ci:web-tag
+        tag: dev-958b38a # ci:web-tag
     realtime:
       image:
-        tag: 'e310f56' # ci:realtime-tag
+        tag: '958b38a' # ci:realtime-tag
