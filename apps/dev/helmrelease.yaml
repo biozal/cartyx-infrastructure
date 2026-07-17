@@ -23,7 +23,7 @@ spec:
   values:
     web:
       image:
-        tag: dev-c1f4079 # ci:web-tag
+        tag: dev-326c7db # ci:web-tag
     realtime:
       image:
-        tag: 'c1f4079' # ci:realtime-tag
+        tag: '326c7db' # ci:realtime-tag
