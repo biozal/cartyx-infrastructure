@@ -23,10 +23,10 @@ spec:
   values:
     web:
       image:
-        tag: dev-4a502a7 # ci:web-tag
+        tag: dev-f3eb047 # ci:web-tag
     realtime:
       image:
-        tag: '4a502a7' # ci:realtime-tag
+        tag: 'f3eb047' # ci:realtime-tag
     # Placeholder until the first cartyx-app deploy seds a real SHA in. The
     # chart's `required` guard only checks the value is non-empty, so this
     # keeps the whole release rendering; the audio-worker pod itself will not
