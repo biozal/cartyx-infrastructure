@@ -9,4 +9,4 @@ spec:
   interval: 1m
   url: https://github.com/biozal/cartyx-infrastructure.git
   ref:
-    tag: data-v0.1.0
+    tag: data-v0.1.1

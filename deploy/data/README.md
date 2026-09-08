@@ -1,8 +1,8 @@
 # Cluster database backup operations
 
-The dev Kubernetes backup schedule is enabled after the manual backup and fresh
-volume restore passed. Production scheduling remains suspended until its own
-rehearsal passes. The deployed image set and its reviewed exception are recorded in the
+Both Kubernetes backup schedules are enabled after each environment passed a
+manual backup and fresh-volume off-host restore. Dev runs at 08:00 UTC and
+production at 09:00 UTC. The deployed image set and its reviewed exception are recorded in the
 [image security review](SECURITY.md). This is separate from the tested local Docker backup script.
 No application subsystem has switched to these databases yet.
 
@@ -164,3 +164,19 @@ An orderly z440 reboot then returned the node and both databases to Ready in
 233 seconds with the same dev PVC/PV. k3s started automatically and the competing
 MicroK8s services remained stopped. All active workload pods recovered. This is
 a single-host persistence check, not high availability or a host-loss rebuild.
+
+## Production recovery verification (2026-09-08)
+
+Production deployed from immutable tag `data-v0.1.0`, with a separate 60 GiB
+retained PVC and environment credentials. Its graph fixture, TLS/authentication,
+CQL permissions and live network restrictions passed; production also rejected
+dev Gremlin credentials over verified production TLS.
+
+The first production backup completed in 71 seconds, uploaded 79,683 bytes to
+private R2 and verified full checksum read-back. An independent-volume restore
+using only that off-host archive passed graph/TLS/auth/CQL checks in 58 seconds.
+These tiny-fixture durations do not establish a production-size RTO.
+
+Promotion `data-v0.1.1` enables the 09:00 UTC production schedule after this
+rehearsal. The whole production data overlay remains pinned to the immutable
+tag. Existing database images, source volumes and credentials are retained.
