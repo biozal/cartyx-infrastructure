@@ -22,7 +22,7 @@ jobs:
           cache-dependency-path: deploy/data/package-lock.json
       - run: npm ci --prefix deploy/data --ignore-scripts
       - run: npm audit --prefix deploy/data --audit-level=moderate
-      - run: node --test deploy/data/tests/chart.test.mjs
+      - run: node --test deploy/data/tests/*.test.mjs
       - name: Start real Cassandra and JanusGraph
         run: node scripts/dev-data.mjs up
       - name: Schema, Gremlin client, TLS, and scoped credentials

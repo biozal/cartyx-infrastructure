@@ -1,0 +1,45 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cartyx-data-backup-dev
+  namespace: flux-system
+rules:
+  - apiGroups: [kustomize.toolkit.fluxcd.io]
+    resources: [kustomizations]
+    resourceNames: [data-dev]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cartyx-data-backup-dev
+  namespace: flux-system
+subjects:
+  - { kind: ServiceAccount, name: cartyx-data-backup, namespace: dev }
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cartyx-data-backup-dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cartyx-data-backup-prod
+  namespace: flux-system
+rules:
+  - apiGroups: [kustomize.toolkit.fluxcd.io]
+    resources: [kustomizations]
+    resourceNames: [data-prod]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cartyx-data-backup-prod
+  namespace: flux-system
+subjects:
+  - { kind: ServiceAccount, name: cartyx-data-backup, namespace: prod }
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cartyx-data-backup-prod

@@ -3,3 +3,12 @@ kind: Kustomization
 namespace: prod
 resources:
   - helmrelease.yaml
+  - ../../deploy/data
+patches:
+  - target:
+      kind: CronJob
+      name: cartyx-data-backup
+    patch: |-
+      - op: replace
+        path: /spec/schedule
+        value: '0 9 * * *'
