@@ -511,7 +511,7 @@ spec:
                     relativeTimeRange: { from: 900, to: 0 }
                     datasourceUid: victoriametrics
                     model:
-                      expr: cartyx_data_backup_failed == 1
+                      expr: (cartyx_data_backup_failed == 1) or ((time() - cartyx_data_backup_last_attempt_timestamp_seconds > 3600) and on(environment) (cartyx_data_backup_in_progress == 1))
                       instant: true
               - uid: cartyx-data-certificate-expiry
                 title: Cartyx database TLS certificate expires within 30 days

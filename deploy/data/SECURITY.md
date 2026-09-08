@@ -1,9 +1,9 @@
 # Database image security review — 2026-09-08
 
-Production remains suspended. Dev is an isolated infrastructure rehearsal with
-only the synthetic graph fixture; MongoDB remains authoritative. The functional
-compatibility and recovery tests passed, but those tests do not clear container
-vulnerability findings or authorize an application cutover.
+The maintained image set below is promoted through an immutable production
+infrastructure tag after dev verification. MongoDB remains authoritative; the
+graph contains only the infrastructure fixture. Production must pass its own
+recovery rehearsal before scheduling is enabled or application migration begins.
 
 ## Baseline
 
@@ -78,7 +78,10 @@ constructor and configuration boundary. Local upgrade, protocol/security and
 fresh-volume backup/restore checks passed. Native amd64 and arm64 CI both passed builds, vulnerability gates, runtime
 dependency checks, TLS/auth/CQL permissions, persistence and independent-volume
 backup/restore in [PR #10](https://github.com/biozal/cartyx-infrastructure/pull/10).
-Live dev verification remains required before production promotion.
+Live dev verification also passed: the upgrade retained its original PVC/PV,
+and graph persistence, TLS/auth, CQL roles, k3s NetworkPolicy and an R2-only
+fresh-volume restore succeeded. The remaining SnakeYAML exception is still
+time-limited and does not disappear when production is enabled.
 
 ## Promotion evidence required
 
@@ -89,8 +92,9 @@ dev recovery/network checks against the replacement images. Then promote an
 immutable infrastructure tag and run production's own backup/restore rehearsal
 before enabling its schedule or migrating any application subsystem.
 
-Keep this review open until that evidence exists. Do not equate dev readiness,
-zero npm advisories, or a successful synthetic restore with production approval.
+Keep the residual advisory review open through remediation or renewed review
+before expiry. Production recovery evidence must be recorded separately;
+synthetic tests do not establish application authorization or production-scale RTO.
 
 ## Published candidate images
 
@@ -101,3 +105,7 @@ Chart/Compose pins use these identical OCI index digests:
 
 - cassandra: `ghcr.io/biozal/cartyx-cassandra@sha256:6d29c4203ab50b406d2bc0bacd5c7aea5cb1f98686df95459efd6c5677585b0a`
 - janusgraph: `ghcr.io/biozal/cartyx-janusgraph@sha256:afa8a11d129f1cab44e5998565f92a950d916d2c94a677e8114849967372a375`
+
+The hardened dev set also survived an orderly node reboot (233 seconds to node
+and database readiness), retaining its original PVC/PV. Production scheduling
+stays suspended until its own R2-only restore and isolation checks pass.
