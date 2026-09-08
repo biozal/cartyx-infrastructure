@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { X509Certificate } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { clusterApi, paths } from './cluster-api.mjs';
 
@@ -19,7 +19,11 @@ export function metricsFor(environment, state, suspended, expires) {
   return Object.entries(values).map(([name, value]) => `# TYPE ${name} gauge\n${name}{environment="${environment}"} ${value}\n`).join('');
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Kubernetes ConfigMap mounts use symlinks; Node resolves import.meta.url to
+// their real location while argv retains the mounted path.
+export const isEntrypoint = (url, filename) => Boolean(filename) && url === pathToFileURL(realpathSync(filename)).href;
+
+if (isEntrypoint(import.meta.url, process.argv[1])) {
   const api = clusterApi();
   const p = paths(process.env.POD_NAMESPACE);
   http.createServer(async (request, response) => {

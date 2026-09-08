@@ -1,12 +1,25 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, symlinkSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import yaml from 'js-yaml';
 import { paths, resume, microTime } from '../cluster-api.mjs';
-import { metricsFor } from '../backup-metrics.mjs';
+import { metricsFor, isEntrypoint } from '../backup-metrics.mjs';
 
 const original = { graph: 1, cassandra: 1, helm: false, flux: false };
+test('metrics starts when invoked through a ConfigMap-style symlink', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cartyx-configmap-'));
+  try {
+    const target = resolve('deploy/data/backup-metrics.mjs');
+    const link = join(directory, 'backup-metrics.mjs');
+    symlinkSync(target, link);
+    assert.equal(isEntrypoint(pathToFileURL(target).href, link), true);
+    assert.equal(isEntrypoint(import.meta.url, link), false);
+  } finally { rmSync(directory, {recursive: true}); }
+});
 test('Lease timestamps use the six fractional digits required by Kubernetes MicroTime', () => {
   assert.equal(microTime(new Date('2026-09-08T06:13:21.635Z')), '2026-09-08T06:13:21.635000Z');
 });
