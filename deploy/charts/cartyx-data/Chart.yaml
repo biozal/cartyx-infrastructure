@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cartyx-data
+description: Cartyx JanusGraph and Cassandra infrastructure (independent of the app release)
+type: application
+version: 0.1.0
+appVersion: '1.1.0'

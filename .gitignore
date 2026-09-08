@@ -4,3 +4,8 @@ secrets/
 *.pem
 *-token
 kubeconfig
+
+# Local credentials, database archives, and tool dependencies
+.local/
+node_modules/
+__pycache__/

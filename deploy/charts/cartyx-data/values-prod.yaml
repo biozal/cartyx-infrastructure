@@ -1,0 +1,5 @@
+environment: prod
+graphKeyspace: cartyx_prod_graph
+stateKeyspace: cartyx_prod_state
+cassandra:
+  storage: 60Gi

@@ -45,6 +45,36 @@ here (anchored on the `# ci:web-tag` / `# ci:realtime-tag` comments). Flux
 reconciles within a minute. Manual version pin: edit those same lines and
 commit.
 
+## Cartyx data infrastructure (staged)
+
+`clusters/z440/data-dev.yaml` and `data-prod.yaml` reconcile independent
+`data/dev` and `data/prod` HelmReleases from this repository's
+`deploy/charts/cartyx-data`. Dev uses the existing `flux-system` source (main).
+Production uses `cartyx-data-prod`, pinned to a promoted `data-v*` tag in
+`clusters/z440/data-source-prod.yaml`. Never move a published data release tag.
+Both releases and the production source are initially suspended pending live
+preflight, secrets and recovery verification; `data-v0.1.0` is planned and has
+not been published. Application image-tag markers and sources are unchanged.
+
+This repository also owns `deploy/local/data.compose.yaml`, `deploy/data` tools,
+and `.github/workflows/data-infrastructure.yml`. From this root, use
+`npm run db:tools`, `npm run db:up`, and `npm run db:smoke -- seed`.
+The app's local Compose and npm startup commands delegate here via a sibling
+checkout or an absolute `CARTYX_INFRASTRUCTURE_DIR` environment variable.
+
+`infrastructure/data-storage.yaml` defines `cartyx-data-retain`, a local-path
+StorageClass with Retain reclaim policy. The data Kustomizations do not prune;
+the chart also protects its PVC from Helm deletion. This retains files but
+does not provide a disk quota or protect against losing z440.
+
+Provision a separate `cartyx-data` Secret in dev/prod using this repository's
+`deploy/data/kubernetes.mjs` helper. Follow the
+[data runbook](deploy/charts/cartyx-data/README.md) for the tested image matrix, required
+preflight, enablement order, and outstanding production backup gates.
+
+Grafana includes a data dashboard and database-unavailability rule; live
+metric and alert evaluation are still to be verified on the cluster.
+
 ## Certificates
 
 Per-environment, deliberately not a shared wildcard: the `dev` key is not valid

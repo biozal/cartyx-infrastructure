@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "data.name" . }}-bootstrap-{{ .Release.Revision }}
+  labels:
+    {{- include "data.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        {{- include "data.labels" . | nindent 8 }}
+        app.kubernetes.io/component: bootstrap
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: bootstrap
+          image: {{ .Values.cassandra.image | quote }}
+          command: [python3, /config/cassandra-admin.py, bootstrap]
+          env:
+            - { name: CASSANDRA_HOST, value: {{ include "data.name" . }}-cassandra }
+            - { name: CASSANDRA_DC, value: {{ .Values.datacenter | quote }} }
+            - { name: GRAPH_KEYSPACE, value: {{ .Values.graphKeyspace | quote }} }
+            - { name: STATE_KEYSPACE, value: {{ .Values.stateKeyspace | quote }} }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: '1', memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: config, mountPath: /config, readOnly: true }
+            - { name: secrets, mountPath: /secrets, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: {{ include "data.name" . }}-config }
+        - name: secrets
+          secret: { secretName: {{ .Values.secretName }}, defaultMode: 0440 }

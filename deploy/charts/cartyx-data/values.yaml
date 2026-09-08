@@ -1,0 +1,24 @@
+# Deliberately single-node: scaling Cassandra needs a topology/repair migration.
+environment: ''
+secretName: cartyx-data
+graphKeyspace: cartyx_graph
+stateKeyspace: cartyx_state
+datacenter: dc1
+cassandra:
+  image: cassandra:4.0.21@sha256:093ee8ee5eb2f714df705b5629d2f82c03687df4dcf30d845ca0f2f594b79d90
+  replicas: 1
+  heap: 1G
+  newHeap: 256M
+  storageClass: cartyx-data-retain
+  storage: 30Gi
+  resources:
+    requests: { cpu: 500m, memory: 2Gi }
+    limits: { cpu: '2', memory: 3Gi }
+janusgraph:
+  image: janusgraph/janusgraph:1.1.0@sha256:75f57aff4b152ca86b4cdaeefb5335154d7fad412cffef75fa44c7504adc96d4
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 1536Mi }
+    limits: { cpu: '2', memory: 2Gi }
+networkPolicy:
+  enabled: true

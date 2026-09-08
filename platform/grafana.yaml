@@ -74,6 +74,160 @@ spec:
             options: { path: /var/lib/grafana/dashboards/default }
     dashboards:
       default:
+        cartyx-data:
+          json: |
+            {
+              "schemaVersion": 39,
+              "title": "Cartyx Data Infrastructure",
+              "uid": "cartyx-data",
+              "refresh": "30s",
+              "time": {
+                "from": "now-1h",
+                "to": "now"
+              },
+              "panels": [
+                {
+                  "id": 1,
+                  "type": "timeseries",
+                  "title": "Memory by database container",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                  },
+                  "gridPos": {
+                    "x": 0,
+                    "y": 0,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "expr": "sum by (namespace, pod, container) (container_memory_working_set_bytes{namespace=~\"dev|prod\",pod=~\"cartyx-data-.*\",container!=\"\"})",
+                      "legendFormat": "{{namespace}} {{pod}} {{container}}"
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "bytes"
+                    },
+                    "overrides": []
+                  }
+                },
+                {
+                  "id": 2,
+                  "type": "timeseries",
+                  "title": "CPU by database container",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                  },
+                  "gridPos": {
+                    "x": 12,
+                    "y": 0,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "expr": "sum by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{namespace=~\"dev|prod\",pod=~\"cartyx-data-.*\",container!=\"\"}[5m]))",
+                      "legendFormat": "{{namespace}} {{pod}} {{container}}"
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "cores"
+                    },
+                    "overrides": []
+                  }
+                },
+                {
+                  "id": 3,
+                  "type": "timeseries",
+                  "title": "Ready Cassandra replicas",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                  },
+                  "gridPos": {
+                    "x": 0,
+                    "y": 8,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "expr": "kube_statefulset_status_replicas_ready{namespace=~\"dev|prod\",statefulset=\"cartyx-data-cassandra\"}",
+                      "legendFormat": "{{namespace}} {{pod}} {{container}}"
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "short"
+                    },
+                    "overrides": []
+                  }
+                },
+                {
+                  "id": 4,
+                  "type": "timeseries",
+                  "title": "Available JanusGraph replicas",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                  },
+                  "gridPos": {
+                    "x": 12,
+                    "y": 8,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "expr": "kube_deployment_status_replicas_available{namespace=~\"dev|prod\",deployment=\"cartyx-data-janusgraph\"}",
+                      "legendFormat": "{{namespace}} {{pod}} {{container}}"
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "short"
+                    },
+                    "overrides": []
+                  }
+                },
+                {
+                  "id": 5,
+                  "type": "timeseries",
+                  "title": "Container restarts",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                  },
+                  "gridPos": {
+                    "x": 0,
+                    "y": 16,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "expr": "increase(kube_pod_container_status_restarts_total{namespace=~\"dev|prod\",pod=~\"cartyx-data-.*\"}[1h])",
+                      "legendFormat": "{{namespace}} {{pod}} {{container}}"
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "short"
+                    },
+                    "overrides": []
+                  }
+                }
+              ]
+            }
         k8s-global:
           gnetId: 15757 # "Kubernetes / Views / Global" (dotdc)
           revision: 43
@@ -168,6 +322,19 @@ spec:
             folder: Alerts
             interval: 5m
             rules:
+              - uid: cartyx-data-unready
+                title: Cartyx database unavailable
+                condition: A
+                for: 10m
+                noDataState: OK
+                execErrState: Error
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: kube_statefulset_status_replicas_ready{namespace=~"dev|prod",statefulset="cartyx-data-cassandra"} < 1 or kube_deployment_status_replicas_available{namespace=~"dev|prod",deployment="cartyx-data-janusgraph"} < 1
+                      instant: true
               - uid: pod-crashloop
                 title: Pod crash-looping
                 condition: A

@@ -1,0 +1,13 @@
+{
+  "name": "cartyx-infrastructure",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:tools": "node scripts/dev-data.mjs tools",
+    "db:up": "node scripts/dev-data.mjs up",
+    "db:down": "node scripts/dev-data.mjs down",
+    "db:status": "node scripts/dev-data.mjs status",
+    "db:smoke": "node scripts/dev-data.mjs smoke",
+    "db:chart-test": "node scripts/dev-data.mjs chart-test"
+  }
+}
