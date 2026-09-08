@@ -2,7 +2,7 @@
 
 The dev Kubernetes backup schedule is enabled after the manual backup and fresh
 volume restore passed. Production scheduling remains suspended until its own
-rehearsal passes. Production deployment is also held by the
+rehearsal passes. The deployed image set and its reviewed exception are recorded in the
 [image security review](SECURITY.md). This is separate from the tested local Docker backup script.
 No application subsystem has switched to these databases yet.
 
@@ -123,7 +123,9 @@ Each namespace exposes `cartyx-data-metrics:9095/metrics` for Alloy. The exporte
 can read only backup status and schedule metadata, and mounts only the public TLS
 certificate. It cannot read database passwords or modify workloads. Grafana
 alerts on backups older than 26 hours when scheduling is enabled, failed/recovered
-backup attempts, certificate expiry within 30 days, and a missing metrics target.
+backup attempts, attempts stuck in progress for more than one hour, certificate
+expiry within 30 days, and a missing metrics target. The stuck-attempt condition
+catches abrupt exits that cannot update their own failure status.
 The status ConfigMap preserves the last verified backup timestamp after a failed
 attempt, so age monitoring remains meaningful.
 
@@ -148,3 +150,17 @@ candidate tags. Keep both `CARTYX_CASSANDRA_IMAGE` and
 `CARTYX_JANUSGRAPH_IMAGE` overrides set when testing custom images. Restore older
 format-1 archives with their matching infrastructure checkout. See the
 [image build and promotion guide](../images/README.md).
+
+## Hardened image dev rehearsal
+
+On 2026-09-08, dev upgraded to the published maintained image digests while
+retaining the original PVC/PV. GraphSON 3/bytecode persistence, TLS/authentication,
+scoped CQL roles and live namespace network restrictions passed. The backup of
+that image set completed in 73 seconds, and its R2-only fresh-volume restore
+passed in 57 seconds. These remain tiny-fixture measurements. The scratch
+namespace and its independent storage were removed after verification.
+
+An orderly z440 reboot then returned the node and both databases to Ready in
+233 seconds with the same dev PVC/PV. k3s started automatically and the competing
+MicroK8s services remained stopped. All active workload pods recovered. This is
+a single-host persistence check, not high availability or a host-loss rebuild.

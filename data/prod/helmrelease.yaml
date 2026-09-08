@@ -3,8 +3,8 @@ kind: HelmRelease
 metadata:
   name: cartyx-data
 spec:
-  # Enable only after dev deployment/restore evidence and prod preflight.
-  suspend: true
+  # Dev image upgrade, off-host restore and capacity checks passed.
+  suspend: false
   interval: 5m
   timeout: 15m
   chart:

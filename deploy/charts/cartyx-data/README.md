@@ -85,13 +85,15 @@ repo's main branch). Production uses `cartyx-data-prod`, configured with an exac
 `data-v*` tag in `clusters/z440/data-source-prod.yaml`. This keeps production on
 the tested chart revision while dev advances. Never move a published release tag.
 Flux supports an exact tag in [GitRepository ref](https://fluxcd.io/flux/components/source/gitrepositories/#tag).
-The initial production source is suspended, and `data-v0.1.0` has not been
-published. Application sources and their dev/main promotion remain unchanged.
+The initial production promotion is `data-v0.1.0`. The entire production data
+overlay, including backup resources, reads from that tag. Application sources
+and their dev/main promotion remain unchanged.
 
 Dev is active and its live network, persistence and off-host recovery checks
-have passed. Production remains suspended until the hardened images pass live dev upgrade
-and off-host recovery checks. Native amd64/arm64 build, vulnerability and recovery
-CI passed before image publication. See the
+have passed against the hardened images. Production is enabled from that tested
+image/configuration set, with its backup schedule suspended until its own restore
+rehearsal passes. Native amd64/arm64 build, vulnerability and recovery CI passed
+before image publication. See the
 [security review](../../data/SECURITY.md) before promoting an image set. Do not
 mark production complete from rendered manifests, local tests or dev readiness.
 

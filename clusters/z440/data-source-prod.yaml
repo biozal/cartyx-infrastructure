@@ -4,8 +4,8 @@ metadata:
   name: cartyx-data-prod
   namespace: flux-system
 spec:
-  # Stage until this tag is published from a revision validated in dev.
-  suspend: true
+  # Promote only immutable revisions verified in dev.
+  suspend: false
   interval: 1m
   url: https://github.com/biozal/cartyx-infrastructure.git
   ref:
