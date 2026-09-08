@@ -2,7 +2,8 @@
 
 The dev Kubernetes backup schedule is enabled after the manual backup and fresh
 volume restore passed. Production scheduling remains suspended until its own
-rehearsal passes. This is separate from the tested local Docker backup script.
+rehearsal passes. Production deployment is also held by the
+[image security review](SECURITY.md). This is separate from the tested local Docker backup script.
 No application subsystem has switched to these databases yet.
 
 The first dev cluster rehearsal passed on 2026-09-08: an 88-second backup
@@ -11,6 +12,12 @@ that off-host archive to a new namespace/PV took 79 seconds and passed persisted
 graph, TLS and invalid-credential checks. These are tiny-fixture measurements,
 not production-size RTO guarantees. Both namespace Atlas inventories were also
 captured read-only (private reports stay in the application checkout).
+
+A subsequent SIGTERM drill interrupted the backup while Cassandra was scaled
+down. The handler restored both databases and Flux, cleared the Lease, and
+preserved the last verified backup timestamp. The next backup completed in
+86 seconds. This tests cooperative termination; a hard-killed pod/host failure
+still requires a separate recovery-mode drill.
 
 `backup-cluster.mjs` takes an exclusive per-environment Lease, suspends that
 environment's data Kustomization and HelmRelease, stops JanusGraph, and scales
