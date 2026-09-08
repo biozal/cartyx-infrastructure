@@ -91,8 +91,8 @@ and their dev/main promotion remain unchanged.
 
 Dev is active and its live network, persistence and off-host recovery checks
 have passed against the hardened images. Production is enabled from that tested
-image/configuration set, with its backup schedule suspended until its own restore
-rehearsal passes. Native amd64/arm64 build, vulnerability and recovery CI passed
+image/configuration set. Its own off-host restore passed; `data-v0.1.1` enables
+the daily production backup schedule. Native amd64/arm64 build, vulnerability and recovery CI passed
 before image publication. See the
 [security review](../../data/SECURITY.md) before promoting an image set. Do not
 mark production complete from rendered manifests, local tests or dev readiness.

@@ -107,5 +107,6 @@ Chart/Compose pins use these identical OCI index digests:
 - janusgraph: `ghcr.io/biozal/cartyx-janusgraph@sha256:afa8a11d129f1cab44e5998565f92a950d916d2c94a677e8114849967372a375`
 
 The hardened dev set also survived an orderly node reboot (233 seconds to node
-and database readiness), retaining its original PVC/PV. Production scheduling
-stays suspended until its own R2-only restore and isolation checks pass.
+and database readiness), retaining its original PVC/PV. Production also passed its own R2-only restore and isolation checks: the first
+backup took 71 seconds and fresh-volume restore took 58 seconds. These remain
+synthetic-fixture results. The scoped advisory exception remains open.
