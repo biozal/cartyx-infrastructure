@@ -3,9 +3,12 @@ import test from 'node:test';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import yaml from 'js-yaml';
-import { paths, resume } from '../cluster-api.mjs';
+import { paths, resume, microTime } from '../cluster-api.mjs';
 
 const original = { graph: 1, cassandra: 1, helm: false, flux: false };
+test('Lease timestamps use the six fractional digits required by Kubernetes MicroTime', () => {
+  assert.equal(microTime(new Date('2026-09-08T06:13:21.635Z')), '2026-09-08T06:13:21.635000Z');
+});
 test('recovery waits for databases before restoring Flux, with Cassandra first', async () => {
   const p = paths('dev');
   const calls = [];
