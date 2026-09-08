@@ -16,8 +16,11 @@ captured read-only (private reports stay in the application checkout).
 A subsequent SIGTERM drill interrupted the backup while Cassandra was scaled
 down. The handler restored both databases and Flux, cleared the Lease, and
 preserved the last verified backup timestamp. The next backup completed in
-86 seconds. This tests cooperative termination; a hard-killed pod/host failure
-still requires a separate recovery-mode drill.
+86 seconds. A subsequent host-runtime SIGKILL drill interrupted the backup with Cassandra
+scaled to zero. The process exited 137, retained the Lease and previous verified
+backup timestamp, and the separate `recover` Job restored both databases and Flux
+before clearing the Lease. This tests abrupt process loss; complete host loss
+and orderly reboot remain separate drills.
 
 `backup-cluster.mjs` takes an exclusive per-environment Lease, suspends that
 environment's data Kustomization and HelmRelease, stops JanusGraph, and scales

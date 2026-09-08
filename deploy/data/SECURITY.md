@@ -75,8 +75,10 @@ report zero critical/high findings for JanusGraph and one high finding for
 Cassandra: a time-limited, path/package-scoped SnakeYAML trusted-input exception.
 The loader is not safe for untrusted YAML; the linked review records the actual
 constructor and configuration boundary. Local upgrade, protocol/security and
-fresh-volume backup/restore checks passed. Native CI and live dev verification
-remain required before promotion.
+fresh-volume backup/restore checks passed. Native amd64 and arm64 CI both passed builds, vulnerability gates, runtime
+dependency checks, TLS/auth/CQL permissions, persistence and independent-volume
+backup/restore in [PR #10](https://github.com/biozal/cartyx-infrastructure/pull/10).
+Live dev verification remains required before production promotion.
 
 ## Promotion evidence required
 
@@ -89,3 +91,13 @@ before enabling its schedule or migrating any application subsystem.
 
 Keep this review open until that evidence exists. Do not equate dev readiness,
 zero npm advisories, or a successful synthetic restore with production approval.
+
+## Published candidate images
+
+[Publication run 34246974822](https://github.com/biozal/cartyx-infrastructure/actions/runs/34246974822)
+passed native tests and scans on both architectures, then assembled the tested
+digests. Anonymous manifest access and amd64/arm64 index membership were verified.
+Chart/Compose pins use these identical OCI index digests:
+
+- cassandra: `ghcr.io/biozal/cartyx-cassandra@sha256:6d29c4203ab50b406d2bc0bacd5c7aea5cb1f98686df95459efd6c5677585b0a`
+- janusgraph: `ghcr.io/biozal/cartyx-janusgraph@sha256:afa8a11d129f1cab44e5998565f92a950d916d2c94a677e8114849967372a375`
