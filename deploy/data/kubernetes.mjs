@@ -4,11 +4,11 @@ import { resolve } from 'node:path';
 
 const [action, environment] = process.argv.slice(2);
 if (
-  !['provision-secret', 'cql-security'].includes(action) ||
+  !['provision-secret', 'provision-backup-secret', 'cql-security'].includes(action) ||
   !['dev', 'prod', 'local'].includes(environment)
 ) {
   throw new Error(
-    'Usage: node deploy/data/kubernetes.mjs provision-secret|cql-security dev|prod|local'
+    'Usage: node deploy/data/kubernetes.mjs provision-secret|provision-backup-secret|cql-security dev|prod|local'
   );
 }
 if (!process.env.DATA_KUBECONFIG)
@@ -24,6 +24,26 @@ const args = [
 const kubectl = (more, input) =>
   execFileSync('kubectl', [...args, ...more], { encoding: 'utf8', input });
 kubectl(['get', 'namespace', namespace]);
+if (action === 'provision-backup-secret') {
+  if (!['dev', 'prod'].includes(environment)) throw new Error('Cluster backup credentials are only for dev/prod');
+  if (kubectl(['get', 'secret', 'cartyx-data-backup', '--ignore-not-found', '-o', 'name']).trim()) {
+    console.log(`Keeping existing ${namespace}/cartyx-data-backup Secret`);
+    process.exit(0);
+  }
+  const source = JSON.parse(execFileSync('kubectl', [
+    '--kubeconfig', process.env.DATA_KUBECONFIG, '--request-timeout=10s',
+    '-n', 'platform', 'get', 'secret', 'platform-backup', '-o', 'json',
+  ], { encoding: 'utf8' }));
+  const data = {};
+  for (const key of ['R2_ACCOUNT_ID', 'R2_BUCKET', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
+    if (!source.data?.[key]) throw new Error(`Missing backup source key: ${key}`);
+    data[key] = source.data[key];
+  }
+  console.log(kubectl(['create', '-f', '-'], JSON.stringify({
+    apiVersion: 'v1', kind: 'Secret', metadata: { name: 'cartyx-data-backup' }, type: 'Opaque', data,
+  })).trim());
+  process.exit(0);
+}
 if (action === 'cql-security') {
   const jobs = JSON.parse(
     kubectl(['get', 'jobs', '-l', 'app.kubernetes.io/name=cartyx-data', '-o', 'json'])

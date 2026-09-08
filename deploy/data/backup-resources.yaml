@@ -1,0 +1,153 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cartyx-data-backup
+automountServiceAccountToken: false
+---
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: cartyx-data-backup
+spec: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cartyx-data-backup-status
+data: {}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cartyx-data-backup
+rules:
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    resourceNames: [cartyx-data-janusgraph, cartyx-data-cassandra]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [deployments/scale, statefulsets/scale]
+    resourceNames: [cartyx-data-janusgraph, cartyx-data-cassandra]
+    verbs: [get, patch]
+  - apiGroups: ['']
+    resources: [pods]
+    verbs: [list]
+  - apiGroups: ['']
+    resources: [configmaps]
+    resourceNames: [cartyx-data-config]
+    verbs: [get]
+  - apiGroups: ['']
+    resources: [configmaps]
+    resourceNames: [cartyx-data-backup-status]
+    verbs: [get, patch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [cartyx-data-backup]
+    verbs: [get, patch]
+  - apiGroups: [helm.toolkit.fluxcd.io]
+    resources: [helmreleases]
+    resourceNames: [cartyx-data]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cartyx-data-backup
+subjects:
+  - kind: ServiceAccount
+    name: cartyx-data-backup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cartyx-data-backup
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cartyx-data-backup
+spec:
+  # UTC. Namespace overlays stagger dev and prod to avoid simultaneous outages.
+  schedule: '0 8 * * *'
+  timeZone: Etc/UTC
+  suspend: true
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: cartyx-data-backup
+        spec:
+          serviceAccountName: cartyx-data-backup
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 700
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+            seccompProfile: { type: RuntimeDefault }
+          initContainers:
+            - name: tools
+              image: node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
+              workingDir: /work
+              # Lockfile-integrity-verified dependencies install before any API
+              # credentials or database volumes are available to the container.
+              command: [sh, -c, 'cp /code/* /work/ && npm ci --ignore-scripts --omit=dev --cache /work/.npm']
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: [ALL] }
+              resources:
+                requests: { cpu: 100m, memory: 128Mi }
+                limits: { cpu: '1', memory: 512Mi }
+              volumeMounts:
+                - { name: code, mountPath: /code, readOnly: true }
+                - { name: work, mountPath: /work }
+          containers:
+            - name: backup
+              image: node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
+              workingDir: /work
+              command: [node, backup-cluster.mjs]
+              env:
+                - name: POD_NAMESPACE
+                  valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+                - name: POD_NAME
+                  valueFrom: { fieldRef: { fieldPath: metadata.name } }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: [ALL] }
+              resources:
+                requests: { cpu: 100m, memory: 256Mi, ephemeral-storage: 1Gi }
+                limits: { cpu: '2', memory: 512Mi, ephemeral-storage: 25Gi }
+              volumeMounts:
+                - { name: work, mountPath: /work }
+                - { name: data, mountPath: /data, readOnly: true }
+                - { name: database-secret, mountPath: /database-secret, readOnly: true }
+                - { name: backup-secret, mountPath: /backup-secret, readOnly: true }
+                - { name: api, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true }
+          volumes:
+            - name: code
+              configMap: { name: cartyx-data-backup-code }
+            - name: work
+              emptyDir: { sizeLimit: 24Gi }
+            - name: data
+              persistentVolumeClaim: { claimName: cartyx-data-cassandra, readOnly: true }
+            - name: database-secret
+              secret: { secretName: cartyx-data, defaultMode: 0440 }
+            - name: backup-secret
+              secret: { secretName: cartyx-data-backup, defaultMode: 0440 }
+            - name: api
+              projected:
+                defaultMode: 0440
+                sources:
+                  - serviceAccountToken: { path: token, expirationSeconds: 3600 }
+                  - configMap:
+                      name: kube-root-ca.crt
+                      items: [{ key: ca.crt, path: ca.crt }]

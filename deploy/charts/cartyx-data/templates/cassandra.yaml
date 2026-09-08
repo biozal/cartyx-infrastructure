@@ -84,6 +84,9 @@ spec:
             - { name: HEAP_NEWSIZE, value: {{ .Values.cassandra.newHeap | quote }} }
           ports:
             - { name: cql-tls, containerPort: 9042 }
+          lifecycle:
+            preStop:
+              exec: { command: [nodetool, drain] }
           resources:
             {{- toYaml .Values.cassandra.resources | nindent 12 }}
           startupProbe:
