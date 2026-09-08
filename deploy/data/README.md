@@ -1,8 +1,16 @@
 # Cluster database backup operations
 
-The Kubernetes CronJobs are staged suspended until a manual backup and a fresh
-volume restore have passed. This is separate from the tested local Docker
-backup script. No application subsystem has switched to these databases yet.
+The dev Kubernetes backup schedule is enabled after the manual backup and fresh
+volume restore passed. Production scheduling remains suspended until its own
+rehearsal passes. This is separate from the tested local Docker backup script.
+No application subsystem has switched to these databases yet.
+
+The first dev cluster rehearsal passed on 2026-09-08: an 88-second backup
+uploaded 109,688 bytes and verified the full R2 read-back; restoring solely from
+that off-host archive to a new namespace/PV took 79 seconds and passed persisted
+graph, TLS and invalid-credential checks. These are tiny-fixture measurements,
+not production-size RTO guarantees. Both namespace Atlas inventories were also
+captured read-only (private reports stay in the application checkout).
 
 `backup-cluster.mjs` takes an exclusive per-environment Lease, suspends that
 environment's data Kustomization and HelmRelease, stops JanusGraph, and scales
@@ -73,6 +81,41 @@ Recovery refuses to proceed while the original pod is Running/Pending. It reads
 the saved original state from the Lease, restores Cassandra and JanusGraph,
 waits for readiness, resumes Flux, then clears the Lease. Run another backup
 after recovery; the interrupted archive is not considered complete.
+
+## Fresh-volume off-host restore
+
+```bash
+node deploy/data/restore-cluster.mjs dev 'cartyx-data/dev/cluster/<backup>.tar.gz.json'
+```
+
+The tool downloads and verifies the completion manifest and archive from R2,
+creates a unique `cartyx-restore-<environment>-<timestamp>` namespace/PVC, loads
+only the data into that empty volume, and installs the matching chart with
+credentials recovered from the archive. It never reads the source database
+Secret or PVC, and never overwrites an existing destination. It verifies the
+persisted relationship, rejects bad TLS/auth, and checks scoped CQL roles.
+
+By default it reads only bucket access credentials from `cartyx-data-backup`.
+For recovery when the original namespace no longer exists, supply all four
+`DATA_BACKUP_ENDPOINT`, `DATA_BACKUP_BUCKET`, `DATA_BACKUP_ACCESS_KEY_ID`, and
+`DATA_BACKUP_SECRET_ACCESS_KEY` settings from your separate credential recovery
+store. The original database credentials are recovered from R2. Check out the
+matching image/configuration revision before restoring an older archive.
+
+Results are written privately under `.local/restores/<namespace>/result.json`.
+Record its namespace/PV names before cleanup. After inspection, remove only that
+scratch namespace; its retained PV requires separate explicit cleanup. Preserve
+the source dev/prod claims and the off-host recovery archive.
+
+## Monitoring
+
+Each namespace exposes `cartyx-data-metrics:9095/metrics` for Alloy. The exporter
+can read only backup status and schedule metadata, and mounts only the public TLS
+certificate. It cannot read database passwords or modify workloads. Grafana
+alerts on backups older than 26 hours when scheduling is enabled, failed/recovered
+backup attempts, certificate expiry within 30 days, and a missing metrics target.
+The status ConfigMap preserves the last verified backup timestamp after a failed
+attempt, so age monitoring remains meaningful.
 
 ## Live access checks
 

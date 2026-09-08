@@ -151,3 +151,106 @@ spec:
                   - configMap:
                       name: kube-root-ca.crt
                       items: [{ key: ca.crt, path: ca.crt }]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cartyx-data-metrics
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cartyx-data-metrics
+rules:
+  - apiGroups: ['']
+    resources: [configmaps]
+    resourceNames: [cartyx-data-backup-status]
+    verbs: [get]
+  - apiGroups: [batch]
+    resources: [cronjobs]
+    resourceNames: [cartyx-data-backup]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cartyx-data-metrics
+subjects:
+  - kind: ServiceAccount
+    name: cartyx-data-metrics
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cartyx-data-metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cartyx-data-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: cartyx-data-metrics }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: cartyx-data-metrics }
+    spec:
+      serviceAccountName: cartyx-data-metrics
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: metrics
+          image: node:24-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
+          command: [node, /code/backup-metrics.mjs]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+          ports: [{ name: metrics, containerPort: 9095 }]
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          readinessProbe:
+            httpGet: { path: /metrics, port: metrics }
+            periodSeconds: 30
+            timeoutSeconds: 20
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 30
+          volumeMounts:
+            - { name: code, mountPath: /code, readOnly: true }
+            - { name: certificate, mountPath: /certificate, readOnly: true }
+            - { name: api, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true }
+      volumes:
+        - name: code
+          configMap: { name: cartyx-data-backup-code }
+        - name: certificate
+          secret:
+            secretName: cartyx-data
+            defaultMode: 0440
+            items: [{ key: tls.crt, path: tls.crt }]
+        - name: api
+          projected:
+            defaultMode: 0440
+            sources:
+              - serviceAccountToken: { path: token, expirationSeconds: 3600 }
+              - configMap:
+                  name: kube-root-ca.crt
+                  items: [{ key: ca.crt, path: ca.crt }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cartyx-data-metrics
+spec:
+  type: ClusterIP
+  selector: { app.kubernetes.io/name: cartyx-data-metrics }
+  ports: [{ name: metrics, port: 9095, targetPort: metrics }]

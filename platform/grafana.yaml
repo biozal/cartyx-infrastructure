@@ -225,6 +225,158 @@ spec:
                     },
                     "overrides": []
                   }
+                },
+                {
+                  "id": 6,
+                  "type": "stat",
+                  "title": "Hours since verified off-host backup",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                  },
+                  "gridPos": {
+                    "x": 0,
+                    "y": 24,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "expr": "(time() - cartyx_data_backup_last_success_timestamp_seconds) / 3600 and on(environment) (cartyx_data_backup_last_success_timestamp_seconds > 0)",
+                      "legendFormat": "{{environment}}",
+                      "instant": true
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "h"
+                    },
+                    "overrides": []
+                  },
+                  "options": {
+                    "reduceOptions": {
+                      "calcs": [
+                        "lastNotNull"
+                      ],
+                      "fields": "",
+                      "values": false
+                    }
+                  }
+                },
+                {
+                  "id": 7,
+                  "type": "stat",
+                  "title": "Database TLS certificate days remaining",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                  },
+                  "gridPos": {
+                    "x": 12,
+                    "y": 24,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "expr": "(cartyx_data_certificate_expiry_timestamp_seconds - time()) / 86400",
+                      "legendFormat": "{{environment}}",
+                      "instant": true
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "d"
+                    },
+                    "overrides": []
+                  },
+                  "options": {
+                    "reduceOptions": {
+                      "calcs": [
+                        "lastNotNull"
+                      ],
+                      "fields": "",
+                      "values": false
+                    }
+                  }
+                },
+                {
+                  "id": 8,
+                  "type": "stat",
+                  "title": "Backup archive size",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                  },
+                  "gridPos": {
+                    "x": 0,
+                    "y": 32,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "expr": "cartyx_data_backup_archive_bytes",
+                      "legendFormat": "{{environment}}",
+                      "instant": true
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "bytes"
+                    },
+                    "overrides": []
+                  },
+                  "options": {
+                    "reduceOptions": {
+                      "calcs": [
+                        "lastNotNull"
+                      ],
+                      "fields": "",
+                      "values": false
+                    }
+                  }
+                },
+                {
+                  "id": 9,
+                  "type": "stat",
+                  "title": "Backup failure state",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                  },
+                  "gridPos": {
+                    "x": 12,
+                    "y": 32,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "expr": "cartyx_data_backup_failed",
+                      "legendFormat": "{{environment}}",
+                      "instant": true
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "none"
+                    },
+                    "overrides": []
+                  },
+                  "options": {
+                    "reduceOptions": {
+                      "calcs": [
+                        "lastNotNull"
+                      ],
+                      "fields": "",
+                      "values": false
+                    }
+                  }
                 }
               ]
             }
@@ -333,7 +485,59 @@ spec:
                     relativeTimeRange: { from: 900, to: 0 }
                     datasourceUid: victoriametrics
                     model:
-                      expr: kube_statefulset_status_replicas_ready{namespace=~"dev|prod",statefulset="cartyx-data-cassandra"} < 1 or kube_deployment_status_replicas_available{namespace=~"dev|prod",deployment="cartyx-data-janusgraph"} < 1
+                      expr: (1 - kube_statefulset_status_replicas_ready{namespace=~"dev|prod",statefulset="cartyx-data-cassandra"}) > 0 or (1 - kube_deployment_status_replicas_available{namespace=~"dev|prod",deployment="cartyx-data-janusgraph"}) > 0
+                      instant: true
+              - uid: cartyx-data-backup-age
+                title: Cartyx database backup older than 26 hours
+                condition: A
+                for: 10m
+                noDataState: OK
+                execErrState: Error
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: (time() - cartyx_data_backup_last_success_timestamp_seconds > 93600) and on(environment) (cartyx_data_backup_enabled == 1)
+                      instant: true
+              - uid: cartyx-data-backup-failed
+                title: Cartyx database backup failed or needs recovery
+                condition: A
+                for: 10m
+                noDataState: OK
+                execErrState: Error
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: cartyx_data_backup_failed == 1
+                      instant: true
+              - uid: cartyx-data-certificate-expiry
+                title: Cartyx database TLS certificate expires within 30 days
+                condition: A
+                for: 10m
+                noDataState: OK
+                execErrState: Error
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: (2592000 - (cartyx_data_certificate_expiry_timestamp_seconds - time())) > 0
+                      instant: true
+              - uid: cartyx-data-metrics-missing
+                title: Cartyx database recovery metrics unavailable
+                condition: A
+                for: 10m
+                noDataState: OK
+                execErrState: Error
+                data:
+                  - refId: A
+                    relativeTimeRange: { from: 900, to: 0 }
+                    datasourceUid: victoriametrics
+                    model:
+                      expr: (1 - up{instance=~"cartyx-data-metrics[.](dev|prod)[.]svc:9095"}) > 0
                       instant: true
               - uid: pod-crashloop
                 title: Pod crash-looping

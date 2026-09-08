@@ -4,3 +4,11 @@ namespace: dev
 resources:
   - helmrelease.yaml
   - ../../deploy/data
+patches:
+  - target:
+      kind: CronJob
+      name: cartyx-data-backup
+    patch: |-
+      - op: replace
+        path: /spec/suspend
+        value: false
