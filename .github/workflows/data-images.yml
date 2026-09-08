@@ -1,0 +1,114 @@
+name: Data images
+on:
+  pull_request:
+    paths: ['deploy/images/**', '.github/workflows/data-images.yml']
+  push:
+    branches: [main]
+    paths: ['deploy/images/**', '.github/workflows/data-images.yml']
+  workflow_dispatch:
+  schedule:
+    - cron: '17 6 * * 1'
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: Build, scan and restore (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    env:
+      CARTYX_CASSANDRA_IMAGE: ghcr.io/${{ github.repository_owner }}/cartyx-cassandra:build-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
+      CARTYX_JANUSGRAPH_IMAGE: ghcr.io/${{ github.repository_owner }}/cartyx-janusgraph:build-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '25'
+          cache: npm
+          cache-dependency-path: deploy/data/package-lock.json
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.2.3
+      - uses: azure/setup-kubectl@c0c8b32d33a5244f1e5947304550403b63930415 # v4
+        with:
+          version: v1.36.1
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - name: Build native candidate images
+        run: |
+          docker build --tag "$CARTYX_CASSANDRA_IMAGE" deploy/images/cassandra
+          docker build --tag "$CARTYX_JANUSGRAPH_IMAGE" deploy/images/janusgraph
+          node deploy/images/verify.mjs
+      - name: Scan dependencies and record SBOMs
+        run: |
+          bash deploy/images/install-trivy.sh
+          mkdir -p .local/image-reports
+          .local/tools/trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --ignorefile /dev/null --format json --output .local/image-reports/janusgraph-scan.json "$CARTYX_JANUSGRAPH_IMAGE"
+          .local/tools/trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --ignorefile deploy/images/cassandra/trivyignore.yaml --show-suppressed --format json --output .local/image-reports/cassandra-scan.json "$CARTYX_CASSANDRA_IMAGE"
+          .local/tools/trivy image --quiet --format cyclonedx --output .local/image-reports/janusgraph-sbom.json "$CARTYX_JANUSGRAPH_IMAGE"
+          .local/tools/trivy image --quiet --format cyclonedx --output .local/image-reports/cassandra-sbom.json "$CARTYX_CASSANDRA_IMAGE"
+      - name: Test database protocol, security and recovery
+        run: |
+          npm ci --prefix deploy/data --ignore-scripts
+          npm audit --prefix deploy/data --audit-level=moderate
+          node --test deploy/data/tests/*.test.mjs
+          node scripts/dev-data.mjs up
+          node deploy/data/smoke.mjs seed
+          node deploy/data/smoke.mjs seed
+          node deploy/data/security.mjs
+          docker compose -p cartyx-local -f deploy/local/data.compose.yaml exec -T cassandra python3 /config/cassandra-admin.py security
+          node deploy/data/backup.mjs local-backup
+          node deploy/data/smoke.mjs verify
+          node scripts/dev-data.mjs down
+          node deploy/data/backup.mjs local-restore "$(ls .local/backups/*.tar.gz.json)"
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event_name != 'schedule'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish only the tested images
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event_name != 'schedule'
+        run: |
+          docker push "$CARTYX_CASSANDRA_IMAGE"
+          docker push "$CARTYX_JANUSGRAPH_IMAGE"
+          node deploy/images/record-digests.mjs .local/image-reports
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: data-images-${{ matrix.arch }}
+          path: .local/image-reports/
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Container status on failure
+        if: failure()
+        run: docker ps -a --format '{{.Names}} {{.Status}}'
+  publish:
+    name: Publish verified multi-architecture manifests
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: data-images-*
+          path: .local/image-reports
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assemble manifests from the two verified architecture digests
+        run: node deploy/images/publish-manifests.mjs .local/image-reports

@@ -1,0 +1,6 @@
+*
+!Dockerfile
+!pom.xml
+!dependencies.sha256
+!requirements.txt
+!apt-packages.txt

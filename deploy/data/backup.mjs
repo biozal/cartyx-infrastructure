@@ -16,10 +16,11 @@ import { resolve, dirname, basename } from 'node:path';
 const [action, input] = process.argv.slice(2);
 const composeFile = resolve('deploy/local/data.compose.yaml');
 const compose = ['compose', '-p', 'cartyx-local', '-f', composeFile];
-const image =
-  'cassandra:4.0.21@sha256:093ee8ee5eb2f714df705b5629d2f82c03687df4dcf30d845ca0f2f594b79d90';
 const run = (args) =>
   execFileSync('docker', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
+const configured = JSON.parse(run([...compose, 'config', '--format', 'json'])).services;
+const image = configured.cassandra.image;
+const graphImage = configured.janusgraph.image;
 const outputDirectory = resolve('.local/backups');
 mkdirSync(outputDirectory, { recursive: true, mode: 0o700 });
 const lock = `${outputDirectory}/operation.lock`;
@@ -42,6 +43,8 @@ try {
     if (!volume) throw new Error('Cassandra data must use a named volume');
     if (details.Config.Image !== image)
       throw new Error('Unexpected Cassandra image; update/rehearse backup compatibility first');
+    const graph = JSON.parse(run(['inspect', run([...compose, 'ps', '-q', 'janusgraph'])]))[0];
+    if (graph.Config.Image !== graphImage) throw new Error('Unexpected JanusGraph image');
     try {
       run([...compose, 'stop', '-t', '60', 'janusgraph']);
       run([...compose, 'exec', '-T', 'cassandra', 'nodetool', 'drain']);
@@ -77,11 +80,14 @@ try {
         completed,
       ]);
       const manifest = {
-        format: 1,
+        format: 2,
         id,
         createdAt: new Date().toISOString(),
         environment: 'local',
         cassandraImage: image,
+        cassandraImageId: details.Image,
+        janusgraphImage: graphImage,
+        janusgraphImageId: graph.Image,
         graphKeyspace: 'cartyx_graph',
         stateKeyspace: 'cartyx_state',
         method: 'drained-and-stopped-full-data-directory',
@@ -101,8 +107,11 @@ try {
     const manifestPath = resolve(input);
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     if (
-      manifest.format !== 1 ||
+      manifest.format !== 2 ||
       manifest.cassandraImage !== image ||
+      manifest.janusgraphImage !== graphImage ||
+      (!image.includes('@sha256:') && manifest.cassandraImageId !== JSON.parse(run(['image', 'inspect', image]))[0].Id) ||
+      (!graphImage.includes('@sha256:') && manifest.janusgraphImageId !== JSON.parse(run(['image', 'inspect', graphImage]))[0].Id) ||
       manifest.environment !== 'local'
     ) {
       throw new Error('Only matching-version local archives are supported by this rehearsal');
@@ -112,9 +121,13 @@ try {
     if ((await hash(archive)) !== manifest.sha256) throw new Error('Backup checksum mismatch');
     const volume = `cartyx-restore-${Date.now()}`;
     run(['volume', 'create', volume]);
+    // Root is used only to restore ownership into this newly created volume.
+    // The restored database processes run as UID 999.
     run([
       'run',
       '--rm',
+      '--user',
+      '0:0',
       '--network',
       'none',
       '--entrypoint',

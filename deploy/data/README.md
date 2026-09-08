@@ -136,3 +136,12 @@ node deploy/data/kubernetes.mjs cql-security dev
 The network test creates temporary Jobs in both namespaces, proves the allowed
 paths work, checks that unlabeled/cross-namespace connections are denied, and
 deletes its own Jobs. It requires an enforced CNI policy, not default kind.
+
+## Local image compatibility
+
+Local archive format 2 records both database image references and image IDs.
+Restore requires the matching references, and also matching IDs for mutable
+candidate tags. Keep both `CARTYX_CASSANDRA_IMAGE` and
+`CARTYX_JANUSGRAPH_IMAGE` overrides set when testing custom images. Restore older
+format-1 archives with their matching infrastructure checkout. See the
+[image build and promotion guide](../images/README.md).

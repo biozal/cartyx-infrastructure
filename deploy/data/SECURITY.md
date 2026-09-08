@@ -34,7 +34,7 @@ released JanusGraph patch to substitute and assume the findings are resolved.
 See the [upstream releases](https://github.com/JanusGraph/janusgraph/releases)
 and [compatibility matrix](https://docs.janusgraph.org/changelog/).
 
-## Initial triage and required work
+## Baseline triage
 
 - JanusGraph's embedded `/usr/bin/yq` accounts for 75 Go advisory IDs, including
   seven critical findings. Our replacement entrypoint does not invoke it.
@@ -66,6 +66,17 @@ Dev currently has private ClusterIP services, TLS/authentication, separate
 credentials, and tested same/cross-namespace network restrictions. There are no
 runtime application Gremlin credentials yet. Those controls reduce exposure;
 they do not repair the affected dependencies.
+
+## Hardened candidate progress
+
+The [maintained image builds](../images/README.md) replace the vulnerable runtime
+dependencies while preserving the database storage versions. Local arm64 scans
+report zero critical/high findings for JanusGraph and one high finding for
+Cassandra: a time-limited, path/package-scoped SnakeYAML trusted-input exception.
+The loader is not safe for untrusted YAML; the linked review records the actual
+constructor and configuration boundary. Local upgrade, protocol/security and
+fresh-volume backup/restore checks passed. Native CI and live dev verification
+remain required before promotion.
 
 ## Promotion evidence required
 

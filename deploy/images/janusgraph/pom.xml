@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>io.cartyx</groupId><artifactId>janusgraph-cql-runtime</artifactId><version>1.1.0-cartyx.1</version>
+  <properties>
+    <janusgraph.version>1.1.0</janusgraph.version>
+    <tinkerpop.version>3.7.6</tinkerpop.version>
+    <netty.version>4.1.137.Final</netty.version>
+  </properties>
+  <dependencyManagement><dependencies>
+    <dependency><groupId>io.netty</groupId><artifactId>netty-bom</artifactId><version>${netty.version}</version><type>pom</type><scope>import</scope></dependency>
+    <dependency><groupId>com.fasterxml.jackson</groupId><artifactId>jackson-bom</artifactId><version>2.22.2</version><type>pom</type><scope>import</scope></dependency>
+    <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-bom</artifactId><version>2.26.1</version><type>pom</type><scope>import</scope></dependency>
+    <dependency><groupId>org.apache.tinkerpop</groupId><artifactId>gremlin-driver</artifactId><version>${tinkerpop.version}</version></dependency>
+    <dependency><groupId>org.apache.tinkerpop</groupId><artifactId>gremlin-core</artifactId><version>${tinkerpop.version}</version></dependency>
+    <dependency><groupId>org.apache.tinkerpop</groupId><artifactId>gremlin-util</artifactId><version>${tinkerpop.version}</version></dependency>
+    <dependency><groupId>org.apache.tinkerpop</groupId><artifactId>gremlin-language</artifactId><version>${tinkerpop.version}</version></dependency>
+    <dependency><groupId>org.apache.tinkerpop</groupId><artifactId>gremlin-shaded</artifactId><version>${tinkerpop.version}</version></dependency>
+    <dependency><groupId>org.apache.tinkerpop</groupId><artifactId>gremlin-groovy</artifactId><version>${tinkerpop.version}</version></dependency>
+    <dependency><groupId>org.apache.tinkerpop</groupId><artifactId>tinkergraph-gremlin</artifactId><version>${tinkerpop.version}</version></dependency>
+    <dependency><groupId>org.apache.commons</groupId><artifactId>commons-configuration2</artifactId><version>2.15.1</version></dependency>
+    <dependency><groupId>org.apache.commons</groupId><artifactId>commons-lang3</artifactId><version>3.20.0</version></dependency>
+    <dependency><groupId>commons-beanutils</groupId><artifactId>commons-beanutils</artifactId><version>1.11.0</version></dependency>
+    <dependency><groupId>com.rabbitmq</groupId><artifactId>amqp-client</artifactId><version>5.33.1</version></dependency>
+    <dependency><groupId>commons-io</groupId><artifactId>commons-io</artifactId><version>2.22.0</version></dependency>
+    <dependency><groupId>org.yaml</groupId><artifactId>snakeyaml</artifactId><version>2.5</version></dependency>
+  </dependencies></dependencyManagement>
+  <dependencies>
+    <!-- CQL's Hadoop integration is optional upstream and is deliberately not included. -->
+    <dependency><groupId>org.janusgraph</groupId><artifactId>janusgraph-cql</artifactId><version>${janusgraph.version}</version></dependency>
+    <dependency><groupId>org.apache.tinkerpop</groupId><artifactId>gremlin-server</artifactId><version>${tinkerpop.version}</version></dependency>
+    <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-slf4j-impl</artifactId></dependency>
+    <dependency><groupId>com.github.jbellis</groupId><artifactId>jamm</artifactId><version>0.3.3</version></dependency>
+  </dependencies>
+  <build><plugins>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-dependency-plugin</artifactId><version>3.8.1</version></plugin>
+  </plugins></build>
+</project>
