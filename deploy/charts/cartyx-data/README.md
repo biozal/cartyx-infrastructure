@@ -3,7 +3,10 @@
 Independent Helm release for JanusGraph 1.1.0 and Cassandra 4.0.21. Both images
 are pinned to multi-architecture OCI digests. The graph uses CQL with TLS and a
 scoped Cassandra role. Gremlin uses TLS, authentication, and GraphSON 3. The
-JavaScript compatibility tests use Gremlin 3.7.6 against server TinkerPop 3.7.3.
+JavaScript compatibility tests use Gremlin 3.7.6 against server TinkerPop 3.7.6.
+The maintained images use Temurin 11.0.32 and patched dependencies; their build
+inputs, SBOMs, native architecture tests and remaining SnakeYAML exception are
+documented in the [image guide](../../images/README.md).
 The isolated tools override `uuid` to 11.1.1 to fix its buffer-bounds advisory;
 the smoke tests exercise the driver's actual request IDs and serializers.
 
@@ -86,8 +89,9 @@ The initial production source is suspended, and `data-v0.1.0` has not been
 published. Application sources and their dev/main promotion remain unchanged.
 
 Dev is active and its live network, persistence and off-host recovery checks
-have passed. Production remains suspended because the pinned upstream images
-have unresolved high/critical dependency findings. See the
+have passed. Production remains suspended until the hardened images pass live dev upgrade
+and off-host recovery checks. Native amd64/arm64 build, vulnerability and recovery
+CI passed before image publication. See the
 [security review](../../data/SECURITY.md) before promoting an image set. Do not
 mark production complete from rendered manifests, local tests or dev readiness.
 

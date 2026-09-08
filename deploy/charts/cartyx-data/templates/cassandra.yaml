@@ -65,12 +65,18 @@ spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 180
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
         fsGroup: 999
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: cassandra
           image: {{ .Values.cassandra.image | quote }}
           command: [bash, /config/cassandra-start.sh]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
           env:
             - { name: CASSANDRA_CLUSTER_NAME, value: {{ printf "cartyx-%s" .Values.environment | quote }} }
             - { name: CASSANDRA_DC, value: {{ .Values.datacenter | quote }} }
