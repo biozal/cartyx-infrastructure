@@ -85,8 +85,11 @@ Flux supports an exact tag in [GitRepository ref](https://fluxcd.io/flux/compone
 The initial production source is suspended, and `data-v0.1.0` has not been
 published. Application sources and their dev/main promotion remain unchanged.
 
-Both new HelmReleases are staged with `suspend: true`. Do not mark production
-deployment complete from rendered manifests or local kind tests.
+Dev is active and its live network, persistence and off-host recovery checks
+have passed. Production remains suspended because the pinned upstream images
+have unresolved high/critical dependency findings. See the
+[security review](../../data/SECURITY.md) before promoting an image set. Do not
+mark production complete from rendered manifests, local tests or dev readiness.
 
 1. Run `DATA_KUBECONFIG=... node deploy/data/preflight.mjs z440`. Verify real
    disk/inodes, memory headroom, k3s network-policy enforcement, and the
@@ -151,8 +154,8 @@ credential directory outside this machine. Before expiry, renew the certificate
 with the same environment SANs, update trust material/Secret, and restart
 Cassandra and JanusGraph during maintenance. Password changes require matching
 CQL role changes plus Secret updates; deleting/regenerating local credentials
-against an existing volume is not a rotation procedure. Runtime/schema roles,
-automated certificate renewal and expiry alerts remain later hardening work.
+against an existing volume is not a rotation procedure. Expiry metrics/alerts are implemented. Runtime/schema roles and automated
+certificate renewal remain later hardening work.
 
 ## Backup and restore rehearsal
 
@@ -185,14 +188,17 @@ verify SHA256 before publishing its completion manifest. Supply separate
 `DATA_BACKUP_ENDPOINT` (HTTPS), `DATA_BACKUP_BUCKET`, `DATA_BACKUP_ACCESS_KEY_ID`,
 and `DATA_BACKUP_SECRET_ACCESS_KEY` environment variables. It intentionally does
 not inherit public-media bucket credentials. Single uploads above 5 GB are
-rejected pending multipart support. No off-host upload was verified yet.
+rejected pending multipart support. The separate Kubernetes-native path supports multipart uploads and has passed
+full off-host upload/read-back and empty-volume recovery in dev.
 
-**Remaining before production cutover:** implement/rehearse a Kubernetes-native
-scheduled backup using the chosen live storage and private backup credentials;
-coordinate write quiescence and Flux suspension safely; verify fresh-volume
-restore from only off-host artifacts; measure RPO/RTO; configure retention
-(proposed 14 daily/8 weekly), backup-age/failure alerts and certificate expiry.
-Local tar files and a healthy pod do not satisfy these gates.
+The [cluster backup runbook](../../data/README.md) describes the native scheduled
+backup, per-environment Lease, safe Flux/write quiescence, private R2 retention,
+interruption recovery and independent-volume restore. Dev's first verified
+backup took 88 seconds; its fresh-volume recovery took 79 seconds for a tiny
+fixture. A termination drill restored both databases and Flux, and the next
+backup succeeded. Dev scheduling is active. Production needs its own rehearsal
+after the image security gate is resolved. Larger-data recovery objectives,
+hard-kill/host-loss recovery and actual alert delivery still require validation.
 
 ## Validation and observability
 
@@ -210,8 +216,10 @@ The infra change adds a Cartyx Data Infrastructure dashboard and an unavailable
 database alert to the existing Grafana release. Existing Alloy pod discovery
 collects logs; kube-state-metrics/cAdvisor provide readiness, restarts, CPU and
 memory. JanusGraph emits periodic server metrics into logs. JMX query/GC metrics,
-Cassandra compaction/disk instrumentation and backup metrics still need live
-integration and verification before production cutover.
+Cassandra compaction/disk instrumentation still need dedicated integration.
+Backup age/failure, archive size, schedule status and certificate expiry are
+exposed by the dedicated exporter and scraped by Alloy. Alert delivery and
+production-size performance remain validation work.
 
 For bootstrap diagnostics, run the bootstrap job/Compose service with
 `CARTYX_CQL_DIAGNOSTICS=1`; generated passwords are redacted. Bootstrap retries

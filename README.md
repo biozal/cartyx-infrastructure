@@ -45,16 +45,17 @@ here (anchored on the `# ci:web-tag` / `# ci:realtime-tag` comments). Flux
 reconciles within a minute. Manual version pin: edit those same lines and
 commit.
 
-## Cartyx data infrastructure (staged)
+## Cartyx data infrastructure
 
 `clusters/z440/data-dev.yaml` and `data-prod.yaml` reconcile independent
 `data/dev` and `data/prod` HelmReleases from this repository's
 `deploy/charts/cartyx-data`. Dev uses the existing `flux-system` source (main).
 Production uses `cartyx-data-prod`, pinned to a promoted `data-v*` tag in
 `clusters/z440/data-source-prod.yaml`. Never move a published data release tag.
-Both releases and the production source are initially suspended pending live
-preflight, secrets and recovery verification; `data-v0.1.0` is planned and has
-not been published. Application image-tag markers and sources are unchanged.
+Dev is deployed and has passed live TLS/authentication, network policy, pod
+replacement, off-host backup and independent-volume recovery checks. Production
+and its source remain suspended pending the [image security review](deploy/data/SECURITY.md);
+`data-v0.1.0` has not been published. Mongo remains authoritative for the app.
 
 This repository also owns `deploy/local/data.compose.yaml`, `deploy/data` tools,
 and `.github/workflows/data-infrastructure.yml`. From this root, use
@@ -70,10 +71,11 @@ does not provide a disk quota or protect against losing z440.
 Provision a separate `cartyx-data` Secret in dev/prod using this repository's
 `deploy/data/kubernetes.mjs` helper. Follow the
 [data runbook](deploy/charts/cartyx-data/README.md) for the tested image matrix, required
-preflight, enablement order, and outstanding production backup gates.
+preflight and enablement order, plus the [backup operations runbook](deploy/data/README.md).
 
-Grafana includes a data dashboard and database-unavailability rule; live
-metric and alert evaluation are still to be verified on the cluster.
+Grafana includes database readiness, backup age/failure, metrics-target and TLS
+expiry monitoring. Dev backups run daily at 08:00 UTC; production scheduling
+remains suspended until its own recovery rehearsal passes.
 
 ## Certificates
 
