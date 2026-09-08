@@ -1,6 +1,9 @@
 import https from 'node:https';
 import { readFileSync } from 'node:fs';
 
+// coordination.k8s.io Lease uses MicroTime, whose decoder requires six digits.
+export const microTime = (date = new Date()) => date.toISOString().replace(/Z$/, '000Z');
+
 // Deliberately small Kubernetes client; only the mounted service account is used.
 export function clusterApi() {
   const directory = '/var/run/secrets/kubernetes.io/serviceaccount';

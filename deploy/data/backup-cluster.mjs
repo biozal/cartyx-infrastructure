@@ -3,7 +3,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { createReadStream, readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { clusterApi, paths, resume, until } from './cluster-api.mjs';
+import { clusterApi, paths, resume, until, microTime } from './cluster-api.mjs';
 
 const api = clusterApi();
 const p = paths(process.env.POD_NAMESPACE);
@@ -87,7 +87,7 @@ try {
   original = { graph: 1, cassandra: 1, helm: false, flux: false };
   await api('PATCH', p.lease, {
     metadata: { resourceVersion: lease.metadata.resourceVersion, annotations: { 'backup.cartyx.io/original': JSON.stringify(original) } },
-    spec: { holderIdentity: owner, acquireTime: new Date().toISOString(), leaseDurationSeconds: 3600 },
+    spec: { holderIdentity: owner, acquireTime: microTime(), leaseDurationSeconds: 3600 },
   });
   locked = true;
   await status({ phase: 'preparing', lastAttempt: new Date().toISOString(), owner });
