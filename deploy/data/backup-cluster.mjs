@@ -79,11 +79,12 @@ try {
   }
   if (process.argv[2]) throw new Error('Only the optional recover argument is supported');
   if (lease.spec?.holderIdentity) throw new Error('Backup lease is held; inspect/recover the previous operation before retrying');
-  const [graph, cassandra, helm, flux] = await Promise.all([p.graph, p.cassandra, p.helm, p.flux].map(path => api('GET', path)));
+  let [graph, cassandra, helm, flux] = await Promise.all([p.graph, p.cassandra, p.helm, p.flux].map(path => api('GET', path)));
   if (graph.spec.replicas !== 1 || cassandra.spec.replicas !== 1 || helm.spec.suspend || flux.spec.suspend) {
     throw new Error('Expected active Flux release and one replica of each database');
   }
   if (helm.status?.conditions?.some(c => c.type === 'Reconciling' && c.status === 'True')) throw new Error('Helm release is reconciling; retry after rollout');
+  if (!helm.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True') || graph.status.availableReplicas !== 1 || cassandra.status.readyReplicas !== 1) throw new Error('Source databases must be Ready before a scheduled backup');
   original = { graph: 1, cassandra: 1, helm: false, flux: false };
   await api('PATCH', p.lease, {
     metadata: { resourceVersion: lease.metadata.resourceVersion, annotations: { 'backup.cartyx.io/original': JSON.stringify(original) } },
@@ -103,6 +104,9 @@ try {
     const release = await api('GET', p.helm);
     return !release.status?.conditions?.some(c => c.type === 'Reconciling' && c.status === 'True');
   }, 'Helm idle', 120);
+  // An upgrade can finish between preflight and suspension. Capture image and
+  // keyspace metadata only after both reconcilers are idle.
+  [graph, cassandra, helm] = await Promise.all([p.graph, p.cassandra, p.helm].map(path => api('GET', path)));
   checkpoint();
   await api('PATCH', `${p.graph}/scale`, { spec: { replicas: 0 } });
   await until(async () => (await api('GET', p.pods('janusgraph'))).items.length === 0, 'JanusGraph shutdown');
