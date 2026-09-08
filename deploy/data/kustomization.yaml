@@ -9,3 +9,4 @@ configMapGenerator:
       - package-lock.json
       - cluster-api.mjs
       - backup-cluster.mjs
+      - backup-metrics.mjs

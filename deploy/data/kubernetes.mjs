@@ -13,7 +13,10 @@ if (
 }
 if (!process.env.DATA_KUBECONFIG)
   throw new Error('Set DATA_KUBECONFIG explicitly to the target cluster config');
-const namespace = environment === 'local' ? 'cartyx-local' : environment;
+const namespace = process.env.DATA_NAMESPACE ?? (environment === 'local' ? 'cartyx-local' : environment);
+if (process.env.DATA_NAMESPACE && (action !== 'cql-security' || !new RegExp(`^cartyx-restore-${environment}-[0-9]+$`).test(namespace))) {
+  throw new Error('DATA_NAMESPACE is only supported for a matching scratch-restore CQL security check');
+}
 const args = [
   '--kubeconfig',
   process.env.DATA_KUBECONFIG,

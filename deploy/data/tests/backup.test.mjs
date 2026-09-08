@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import yaml from 'js-yaml';
 import { paths, resume, microTime } from '../cluster-api.mjs';
+import { metricsFor } from '../backup-metrics.mjs';
 
 const original = { graph: 1, cassandra: 1, helm: false, flux: false };
 test('Lease timestamps use the six fractional digits required by Kubernetes MicroTime', () => {
@@ -34,6 +35,13 @@ test('failed database recovery leaves Flux suspended for operator recovery', asy
 });
 test('backup cannot target arbitrary application namespaces', () => {
   assert.throws(() => paths('platform'), /dev or prod/);
+});
+test('failed backups retain the last verified recovery timestamp for age alerts', () => {
+  const metrics = metricsFor('dev', {phase: 'failed', lastSuccess: '2026-09-08T06:16:47.000Z'}, false, '2027-09-08T00:00:00Z');
+  assert.match(metrics, /cartyx_data_backup_failed\{environment="dev"\} 1/);
+  assert.match(metrics, /cartyx_data_backup_enabled\{environment="dev"\} 1/);
+  assert.ok(metrics.includes(String(Date.parse('2026-09-08T06:16:47.000Z') / 1000)));
+  assert.match(metricsFor('prod', {}, true, '2027-09-08T00:00:00Z'), /cartyx_data_backup_enabled\{environment="prod"\} 0/);
 });
 for (const environment of ['dev', 'prod']) {
   test(`${environment}: backup credentials isolated from dependency installation and scoped permissions`, () => {

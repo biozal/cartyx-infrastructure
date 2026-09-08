@@ -88,6 +88,14 @@ spec:
             forward_to = [prometheus.remote_write.vm.receiver]
           }
 
+          prometheus.scrape "cartyx_data" {
+            targets = [
+              { __address__ = "cartyx-data-metrics.dev.svc:9095" },
+              { __address__ = "cartyx-data-metrics.prod.svc:9095" },
+            ]
+            forward_to = [prometheus.remote_write.vm.receiver]
+          }
+
           prometheus.scrape "victoriametrics" {
             targets = [{ __address__ = "victoriametrics-server.platform.svc:8428" }]
             forward_to = [prometheus.remote_write.vm.receiver]
