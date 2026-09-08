@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>io.cartyx</groupId><artifactId>cassandra-runtime-patches</artifactId><version>4.0.21-cartyx.1</version>
+  <dependencyManagement><dependencies>
+    <dependency><groupId>io.netty</groupId><artifactId>netty-bom</artifactId><version>4.1.137.Final</version><type>pom</type><scope>import</scope></dependency>
+    <dependency><groupId>com.fasterxml.jackson</groupId><artifactId>jackson-bom</artifactId><version>2.22.2</version><type>pom</type><scope>import</scope></dependency>
+    <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-api</artifactId><version>1.7.36</version></dependency>
+  </dependencies></dependencyManagement>
+  <dependencies>
+    <dependency><groupId>io.netty</groupId><artifactId>netty-all</artifactId></dependency>
+    <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
+    <dependency><groupId>ch.qos.logback</groupId><artifactId>logback-classic</artifactId><version>1.2.13</version></dependency>
+    <!-- Keep the 1.x API used by Cassandra's trusted-file configuration loader. See ../README.md for the scoped CVE-2022-1471 exception. -->
+    <dependency><groupId>org.yaml</groupId><artifactId>snakeyaml</artifactId><version>1.33</version></dependency>
+  </dependencies>
+  <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-dependency-plugin</artifactId><version>3.8.1</version></plugin></plugins></build>
+</project>

@@ -1,0 +1,13 @@
+vulnerabilities:
+  - id: CVE-2022-1471
+    paths: [opt/cassandra/lib/snakeyaml-1.33.jar]
+    purls: [pkg:maven/org.yaml/snakeyaml@1.33]
+    expired_at: 2026-10-08
+    statement: >-
+      Cassandra 4.0.21 requires the SnakeYAML 1.x constructor API. YAML is read
+      only from operator-controlled Cassandra/reporter configuration; application
+      CQL values are not parsed as YAML. The loader uses CustomClassLoaderConstructor,
+      so this is a trusted-input exception, not a claim that it uses safe loading.
+      No public/remote JMX or uploaded configuration is enabled. Reassess before
+      adding any untrusted YAML path, upgrading Cassandra, or the expiration date.
+      Evidence and replacement work are recorded in deploy/images/README.md.
