@@ -1,0 +1,5 @@
+environment: dev
+graphKeyspace: cartyx_dev_graph
+stateKeyspace: cartyx_dev_state
+cassandra:
+  storage: 30Gi

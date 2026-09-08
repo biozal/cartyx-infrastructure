@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "data.name" . }}-janusgraph
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: janusgraph
+  ports:
+    - { name: gremlin-tls, port: 8182, targetPort: 8182 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "data.name" . }}-janusgraph
+  labels:
+    {{- include "data.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: janusgraph
+  template:
+    metadata:
+      labels:
+        {{- include "data.labels" . | nindent 8 }}
+        app.kubernetes.io/component: janusgraph
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        - name: wait-for-cassandra
+          image: {{ .Values.cassandra.image | quote }}
+          command: [bash, -c, 'for i in {1..90}; do python3 /config/cassandra-admin.py ready && exit 0; sleep 5; done; exit 1']
+          env:
+            - { name: CASSANDRA_HOST, value: {{ include "data.name" . }}-cassandra }
+            - { name: STATE_KEYSPACE, value: {{ .Values.stateKeyspace | quote }} }
+          volumeMounts:
+            - { name: config, mountPath: /config, readOnly: true }
+            - { name: bootstrap-secrets, mountPath: /secrets, readOnly: true }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: '1', memory: 256Mi }
+      containers:
+        - name: janusgraph
+          image: {{ .Values.janusgraph.image | quote }}
+          command: [bash, /config/janusgraph-start.sh]
+          env:
+            - { name: CASSANDRA_HOST, value: {{ include "data.name" . }}-cassandra }
+            - { name: CASSANDRA_DC, value: {{ .Values.datacenter | quote }} }
+            - { name: GRAPH_KEYSPACE, value: {{ .Values.graphKeyspace | quote }} }
+          ports:
+            - { name: gremlin-tls, containerPort: 8182 }
+          resources:
+            {{- toYaml .Values.janusgraph.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          startupProbe:
+            tcpSocket: { port: gremlin-tls }
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: [bash, -c, 'java -Xms32m -Xmx128m -cp "lib/*" groovy.ui.GroovyMain /config/graph-probe.groovy >/dev/null 2>&1']
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket: { port: gremlin-tls }
+            periodSeconds: 30
+            failureThreshold: 6
+          volumeMounts:
+            - { name: config, mountPath: /config, readOnly: true }
+            - { name: secrets, mountPath: /secrets, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: {{ include "data.name" . }}-config }
+        - name: secrets
+          secret:
+            secretName: {{ .Values.secretName }}
+            defaultMode: 0440
+            items:
+              - { key: tls.p12, path: tls.p12 }
+              - { key: tls.crt, path: tls.crt }
+              - { key: tls-password, path: tls-password }
+              - { key: cassandra-graph-password, path: cassandra-graph-password }
+              - { key: gremlin-password, path: gremlin-password }
+        - name: bootstrap-secrets
+          secret:
+            secretName: {{ .Values.secretName }}
+            defaultMode: 0440
+            items:
+              - { key: tls.crt, path: tls.crt }
+              - { key: cassandra-admin-password, path: cassandra-admin-password }

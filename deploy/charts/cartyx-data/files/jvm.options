@@ -1,0 +1,4 @@
+-Xms512m
+-Xmx1024m
+-XX:+ExitOnOutOfMemoryError
+-Dgremlin.io.kryoShimService=org.janusgraph.hadoop.serialize.JanusGraphKryoShimService

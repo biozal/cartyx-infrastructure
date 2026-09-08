@@ -1,0 +1,44 @@
+name: Data infrastructure
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  data-infrastructure:
+    name: Data infrastructure (TLS, auth, persistence, restore)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '25'
+          cache: npm
+          cache-dependency-path: deploy/data/package-lock.json
+      - run: npm ci --prefix deploy/data --ignore-scripts
+      - run: npm audit --prefix deploy/data --audit-level=moderate
+      - run: node --test deploy/data/tests/chart.test.mjs
+      - name: Start real Cassandra and JanusGraph
+        run: node scripts/dev-data.mjs up
+      - name: Schema, Gremlin client, TLS, and scoped credentials
+        run: |
+          node deploy/data/smoke.mjs seed
+          node deploy/data/smoke.mjs seed
+          node deploy/data/smoke.mjs verify
+          node deploy/data/security.mjs
+          docker compose -p cartyx-local -f deploy/local/data.compose.yaml exec -T cassandra python3 /config/cassandra-admin.py security
+      - name: Cold backup and independent-volume restore
+        run: |
+          node deploy/data/backup.mjs local-backup
+          node deploy/data/smoke.mjs verify
+          node scripts/dev-data.mjs down
+          node deploy/data/backup.mjs local-restore "$(ls .local/backups/*.tar.gz.json)"
+      - name: Container diagnostics
+        if: failure()
+        # No secrets/configuration dumps or database archives in CI artifacts.
+        run: docker ps -a --format '{{.Names}} {{.Status}}'

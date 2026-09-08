@@ -1,0 +1,71 @@
+# Included by compose.yaml, also usable independently without application .env.
+services:
+  cassandra:
+    image: cassandra:4.0.21@sha256:093ee8ee5eb2f714df705b5629d2f82c03687df4dcf30d845ca0f2f594b79d90
+    entrypoint: [bash, /config/cassandra-start.sh]
+    environment:
+      CASSANDRA_CLUSTER_NAME: cartyx-local
+      CASSANDRA_DC: dc1
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+      CASSANDRA_HOST: localhost
+      MAX_HEAP_SIZE: 1G
+      HEAP_NEWSIZE: 256M
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+      - ../charts/cartyx-data/files:/config:ro
+      - ../../.local/data/local:/secrets:ro
+    # CQL is internal only. Use exec for administration; no default-login window
+    # is exposed on the host during initial provisioning.
+    healthcheck:
+      test: [CMD, python3, /config/cassandra-admin.py, ready]
+      interval: 30s
+      timeout: 35s
+      retries: 5
+      start_period: 180s
+    mem_limit: 3g
+    cpus: 2
+    restart: unless-stopped
+
+  cassandra-init:
+    image: cassandra:4.0.21@sha256:093ee8ee5eb2f714df705b5629d2f82c03687df4dcf30d845ca0f2f594b79d90
+    entrypoint: [python3, /config/cassandra-admin.py, bootstrap]
+    environment:
+      CASSANDRA_HOST: cassandra
+    volumes:
+      - ../charts/cartyx-data/files:/config:ro
+      - ../../.local/data/local:/secrets:ro
+    depends_on:
+      cassandra:
+        condition: service_started
+    mem_limit: 256m
+    restart: 'no'
+
+  janusgraph:
+    image: janusgraph/janusgraph:1.1.0@sha256:75f57aff4b152ca86b4cdaeefb5335154d7fad412cffef75fa44c7504adc96d4
+    entrypoint: [bash, /config/janusgraph-start.sh]
+    environment:
+      CASSANDRA_HOST: cassandra
+    ports:
+      - '127.0.0.1:${GREMLIN_LOCAL_PORT:-18182}:8182'
+    volumes:
+      - ../charts/cartyx-data/files:/config:ro
+      - ../../.local/data/local:/secrets:ro
+    depends_on:
+      cassandra-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          CMD-SHELL,
+          'java -Xms32m -Xmx128m -cp "lib/*" groovy.ui.GroovyMain /config/graph-probe.groovy >/dev/null 2>&1',
+        ]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    mem_limit: 2g
+    cpus: 2
+    restart: unless-stopped
+
+volumes:
+  cassandra-data:

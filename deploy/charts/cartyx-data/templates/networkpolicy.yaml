@@ -1,0 +1,43 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "data.name" . }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: cartyx-data
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: cartyx-data
+      ports:
+        - { protocol: TCP, port: 9042 }
+        - { protocol: TCP, port: 8182 }
+    - from:
+        - podSelector:
+            matchLabels:
+              cartyx.io/data-client: 'true'
+      ports:
+        - { protocol: TCP, port: 8182 }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: cartyx-data
+      ports:
+        - { protocol: TCP, port: 9042 }
+        - { protocol: TCP, port: 8182 }
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+{{- end }}

@@ -1,0 +1,12 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: cartyx-data-prod
+  namespace: flux-system
+spec:
+  # Stage until this tag is published from a revision validated in dev.
+  suspend: true
+  interval: 1m
+  url: https://github.com/biozal/cartyx-infrastructure.git
+  ref:
+    tag: data-v0.1.0

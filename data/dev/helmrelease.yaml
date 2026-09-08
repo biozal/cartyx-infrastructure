@@ -1,0 +1,28 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cartyx-data
+spec:
+  # Remove suspension after capacity/storage preflight and Secret provisioning.
+  # Staged while z440 is unreachable; app deployment remains independent.
+  suspend: true
+  interval: 5m
+  timeout: 15m
+  chart:
+    spec:
+      chart: deploy/charts/cartyx-data
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+      valuesFiles:
+        - deploy/charts/cartyx-data/values.yaml
+        - deploy/charts/cartyx-data/values-dev.yaml
+  install:
+    remediation:
+      retries: 0
+  upgrade:
+    # Database rollback is an explicit restore/schema operation.
+    remediation:
+      retries: 0
