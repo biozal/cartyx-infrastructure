@@ -13,12 +13,17 @@ assert new com.fasterxml.jackson.core.JsonFactory().version().toString() == '2.2
 assert new org.apache.tinkerpop.shaded.jackson.core.JsonFactory().version().toString() == '2.22.2'
 assert io.netty.util.Version.identify().values().every { it.artifactVersion() == '4.1.137.Final' }
 assert org.apache.tinkerpop.gremlin.util.Gremlin.version() == '3.7.6'
+for (handler in [org.apache.tinkerpop.gremlin.server.handler.WebSocketAuthorizationHandler,
+                org.apache.tinkerpop.gremlin.server.handler.HttpBasicAuthorizationHandler]) {
+  assert !handler.declaredFields.any { it.type == org.apache.tinkerpop.gremlin.server.auth.AuthenticatedUser }
+  assert handler.classLoader.getResources(handler.name.replace('.', '/') + '.class').toList().size() == 1
+}
 assert !new File('/usr/bin/yq').exists()
 for (name in ['org.apache.hadoop.conf.Configuration', 'org.apache.spark.SparkContext', 'org.apache.hadoop.hbase.client.Connection']) {
   try { Class.forName(name); assert false : "Unexpected optional backend: " + name }
   catch (ClassNotFoundException expected) { }
 }
-println('Patched JSON/Netty and minimal JanusGraph classpath verified')
+println('Patched JSON/Netty, request-local authorization handlers and minimal JanusGraph classpath verified')
 `]);
 run(['run', '--rm', '--entrypoint', 'python3', cassandra, '-c', `
 from pathlib import Path

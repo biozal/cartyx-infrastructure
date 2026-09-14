@@ -29,6 +29,14 @@ those classes as well. A fixed output timestamp and the final JAR checksum
 validate this artifact. The modified JAR is copied directly into the image;
 it is never published to Maven under the upstream coordinates.
 
+The candidate build also replaces the two Gremlin Server authorization handlers
+with a [reviewed source backport](janusgraph/authorization/README.md). Authenticated
+principals are request-local, denial responses/logs omit request content, and
+malformed HTTP requests release their buffers. Deterministic tests reproduce the
+original concurrency failures before verifying the patch. The resulting server
+JAR has its own locked checksum; no application role or deployed image pin is
+changed by this build update.
+
 Cassandra retains the upstream 4.0.21 server and storage format. Its replacement
 libraries include Netty 4.1.137.Final, Jackson 2.22.2, Logback 1.2.13 and SLF4J
 1.7.36. Native BoringSSL is omitted; Cassandra's supported JRE TLS provider is

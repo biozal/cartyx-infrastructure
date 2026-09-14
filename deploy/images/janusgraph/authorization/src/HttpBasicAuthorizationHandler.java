@@ -1,0 +1,96 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+// Modified by Cartyx, 2026-09-14: request-local principal, content-free failures,
+// and release of rejected malformed HTTP buffers. Based on TinkerPop 3.7.6;
+// isolation backport: eae093bbfdbaf599fff0e44cb7250bf360dba706.
+package org.apache.tinkerpop.gremlin.server.handler;
+
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.codec.http.FullHttpMessage;
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpUtil;
+import io.netty.util.ReferenceCountUtil;
+import org.apache.tinkerpop.gremlin.util.Tokens;
+import org.apache.tinkerpop.gremlin.util.message.RequestMessage;
+import org.apache.tinkerpop.gremlin.server.GremlinServer;
+import org.apache.tinkerpop.gremlin.server.auth.AuthenticatedUser;
+import org.apache.tinkerpop.gremlin.server.authz.AuthorizationException;
+import org.apache.tinkerpop.gremlin.server.authz.Authorizer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
+import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
+import static io.netty.handler.codec.http.HttpResponseStatus.UNAUTHORIZED;
+
+
+/**
+ *  An authorization handler for the http channel that allows the {@link Authorizer} to be plugged into it.
+ *
+ * @author Marc de Lignie
+ */
+@ChannelHandler.Sharable
+public class HttpBasicAuthorizationHandler extends ChannelInboundHandlerAdapter {
+    private static final Logger logger = LoggerFactory.getLogger(HttpBasicAuthorizationHandler.class);
+    private static final Logger auditLogger = LoggerFactory.getLogger(GremlinServer.AUDIT_LOGGER_NAME);
+
+    private final Authorizer authorizer;
+
+    public HttpBasicAuthorizationHandler(Authorizer authorizer) {
+        this.authorizer = authorizer;
+    }
+
+    @Override
+    public void channelRead(final ChannelHandlerContext ctx, final Object msg) {
+        if (msg instanceof FullHttpMessage){
+            final FullHttpMessage request = (FullHttpMessage) msg;
+            final boolean keepAlive = HttpUtil.isKeepAlive(request);
+            final RequestMessage requestMessage;
+            try {
+                requestMessage = HttpHandlerUtil.getRequestMessageFromHttpRequest((FullHttpRequest) request);
+            } catch (IllegalArgumentException iae) {
+                HttpHandlerUtil.sendError(ctx, BAD_REQUEST, "Invalid request", keepAlive);
+                ReferenceCountUtil.release(msg);
+                return;
+            }
+
+            final AuthenticatedUser channelUser = ctx.channel().attr(StateKey.AUTHENTICATED_USER).get();
+            final AuthenticatedUser user = channelUser == null ? AuthenticatedUser.ANONYMOUS_USER : channelUser;
+            try {
+                authorizer.authorize(user, requestMessage);
+                ctx.fireChannelRead(request);
+            } catch (AuthorizationException ex) {  // Expected: users can alternate between allowed and disallowed requests
+                auditLogger.info("User {} attempted an unauthorized http request", user.getName());
+                HttpHandlerUtil.sendError(ctx, UNAUTHORIZED, requestMessage.getRequestId(), "Request denied", keepAlive);
+                ReferenceCountUtil.release(msg);
+            } catch (Exception ex) {
+                final String message = String.format(
+                        "%s is not ready to handle requests - unknown error", authorizer.getClass().getSimpleName());
+                HttpHandlerUtil.sendError(ctx, INTERNAL_SERVER_ERROR, requestMessage.getRequestId(), message, keepAlive);
+                ReferenceCountUtil.release(msg);
+            }
+        } else {
+            logger.warn("{} only processes FullHttpMessage instances - received {} - channel closing",
+                this.getClass().getSimpleName(), msg.getClass());
+            ctx.close();
+        }
+    }
+}
