@@ -2,4 +2,6 @@
 !Dockerfile
 !pom.xml
 !server.sh
+!authorization/
+!authorization/**
 !dependencies.sha256

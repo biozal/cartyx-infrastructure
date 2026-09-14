@@ -29,6 +29,14 @@ those classes as well. A fixed output timestamp and the final JAR checksum
 validate this artifact. The modified JAR is copied directly into the image;
 it is never published to Maven under the upstream coordinates.
 
+The candidate build also replaces the two Gremlin Server authorization handlers
+with a [source backport](janusgraph/authorization/README.md). Authenticated
+principals are request-local, denial responses/logs omit request content, and
+malformed HTTP requests release their buffers. Deterministic tests reproduce the
+original concurrency failures before verifying the patch. The resulting server
+JAR has its own locked checksum; no application role or deployed image pin is
+changed by this build update.
+
 Cassandra retains the upstream 4.0.21 server and storage format. Its replacement
 libraries include Netty 4.1.137.Final, Jackson 2.22.2, Logback 1.2.13 and SLF4J
 1.7.36. Native BoringSSL is omitted; Cassandra's supported JRE TLS provider is
@@ -116,6 +124,13 @@ Take a pre-upgrade dev backup, reconcile dev, repeat protocol/network checks and
 an off-host fresh-volume restore, then promote an immutable infrastructure tag
 to production. Run production's own recovery rehearsal before enabling its
 backup schedule. Preserve older images and matching Git revisions for recovery.
+
+September 14 candidate CI found that Ubuntu had superseded the four pinned Python
+3.12 packages (`3.12.3-1ubuntu0.16`). Their exact pins are now
+`3.12.3-1ubuntu0.17`, verified against the signed Ubuntu package indexes. The
+update is documented in [Ubuntu USN-8744-1](https://ubuntu.com/security/notices/USN-8744-1). The
+remaining apt pins, Python wheel hashes, Cassandra version and JAR locks are
+unchanged. Fresh native image builds/scans and recovery tests gate this refresh.
 
 Maintain this build when upstream dependencies, base images, scanners or the
 trusted-input assumptions change. Record new scan results and recovery evidence
