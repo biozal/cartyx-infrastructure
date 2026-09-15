@@ -5,7 +5,7 @@ graphKeyspace: cartyx_graph
 stateKeyspace: cartyx_state
 datacenter: dc1
 cassandra:
-  image: ghcr.io/biozal/cartyx-cassandra@sha256:6d29c4203ab50b406d2bc0bacd5c7aea5cb1f98686df95459efd6c5677585b0a
+  image: ghcr.io/biozal/cartyx-cassandra@sha256:ce75e4841ab3b15be420ec2823b54ca45c122c42e5854a44618a421bc1583f69
   replicas: 1
   heap: 1G
   newHeap: 256M
@@ -15,7 +15,7 @@ cassandra:
     requests: { cpu: 500m, memory: 2Gi }
     limits: { cpu: '2', memory: 3Gi }
 janusgraph:
-  image: ghcr.io/biozal/cartyx-janusgraph@sha256:afa8a11d129f1cab44e5998565f92a950d916d2c94a677e8114849967372a375
+  image: ghcr.io/biozal/cartyx-janusgraph@sha256:73d1ec1a93ea3e339ecc85c7918a7a7a1dea946db40a0cda59715f3a784270d5
   replicas: 1
   resources:
     requests: { cpu: 250m, memory: 1536Mi }
