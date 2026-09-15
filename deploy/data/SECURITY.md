@@ -96,12 +96,12 @@ Keep the residual advisory review open through remediation or renewed review
 before expiry. Production recovery evidence must be recorded separately;
 synthetic tests do not establish application authorization or production-scale RTO.
 
-## Published candidate images
+## September 8 image promotion
 
 [Publication run 34246974822](https://github.com/biozal/cartyx-infrastructure/actions/runs/34246974822)
 passed native tests and scans on both architectures, then assembled the tested
 digests. Anonymous manifest access and amd64/arm64 index membership were verified.
-Chart/Compose pins use these identical OCI index digests:
+That promotion selected these identical OCI index digests:
 
 - cassandra: `ghcr.io/biozal/cartyx-cassandra@sha256:6d29c4203ab50b406d2bc0bacd5c7aea5cb1f98686df95459efd6c5677585b0a`
 - janusgraph: `ghcr.io/biozal/cartyx-janusgraph@sha256:afa8a11d129f1cab44e5998565f92a950d916d2c94a677e8114849967372a375`
@@ -110,3 +110,35 @@ The hardened dev set also survived an orderly node reboot (233 seconds to node
 and database readiness), retaining its original PVC/PV. Production also passed its own R2-only restore and isolation checks: the first
 backup took 71 seconds and fresh-volume restore took 58 seconds. These remain
 synthetic-fixture results. The scoped advisory exception remains open.
+
+## September 14 authorization-handler image promotion
+
+The merged authorization-handler fix in infrastructure PR #14 was built and published
+from `6aa15cb8fab913414ac9d778c31475e68761296b`.
+[Publication run 34903874475](https://github.com/biozal/cartyx-infrastructure/actions/runs/34903874475)
+passed native amd64/arm64 builds, scans, TLS/authentication, persistence and
+independent-volume restore before publishing. Both scans have zero unexcepted
+HIGH/CRITICAL findings; Cassandra retains the existing scoped SnakeYAML exception.
+
+This change selects the following OCI index digests in both Chart and Compose:
+
+- cassandra: `ghcr.io/biozal/cartyx-cassandra@sha256:ce75e4841ab3b15be420ec2823b54ca45c122c42e5854a44618a421bc1583f69`
+- janusgraph: `ghcr.io/biozal/cartyx-janusgraph@sha256:73d1ec1a93ea3e339ecc85c7918a7a7a1dea946db40a0cda59715f3a784270d5`
+
+Anonymous registry requests verified each index and matched both architecture
+manifests/config digests to the tested CI artifacts and source revision. The
+Gremlin server JAR contains the request-local principal and denial-redaction fixes;
+four superseded Ubuntu Python pins advance to `3.12.3-1ubuntu0.17`. Database storage
+versions, configuration, credentials, graph schema and runtime permissions are unchanged.
+
+Dev follows main; production remains pinned to `data-v0.1.1` and receives no image
+change from this PR. A fresh pre-upgrade dev backup completed on September 14,
+verified its off-host checksum and restored the original source volume. Validate
+that volume, protocol/security contracts and a new off-host fresh-volume restore
+after dev upgrades, before any production tag promotion. Retain the prior image
+references and matching chart revision for explicit recovery from the pre-upgrade
+archive. Running developer containers are upgraded only by a later explicit local
+operation; this pin change does not restart them.
+
+The handler fixes are a prerequisite for a future server-enforced runtime policy.
+No application graph account, Authorizer or identity backend activation is included.
