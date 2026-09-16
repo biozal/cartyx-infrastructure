@@ -54,7 +54,7 @@ try {
   for (const [name, content] of Object.entries(config)) {
     if (!/^[a-zA-Z0-9_.-]+$/.test(name) || readFileSync(`${chart}/files/${name}`, 'utf8') !== content) throw new Error('Check out the matching chart configuration before restoring');
   }
-  const keys = ['tls.p12', 'tls.crt', 'tls-password', 'gremlin-password', 'cassandra-admin-password', 'cassandra-graph-password', 'cassandra-state-password'];
+  const keys = ['tls.p12', 'tls.crt', 'tls-password', 'gremlin-password', 'gremlin-identity-password', 'cassandra-admin-password', 'cassandra-graph-password', 'cassandra-state-password'];
   const credentials = `${directory}/credentials`;
   mkdirSync(credentials, {mode: 0o700});
   for (const key of keys) writeFileSync(`${credentials}/${key}`, member(`credentials/${key}`), {mode: 0o600, flag: 'wx'});

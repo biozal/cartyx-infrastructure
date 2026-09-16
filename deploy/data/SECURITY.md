@@ -142,3 +142,45 @@ operation; this pin change does not restart them.
 
 The handler fixes are a prerequisite for a future server-enforced runtime policy.
 No application graph account, Authorizer or identity backend activation is included.
+
+## September 16 identity-policy image promotion
+
+Infrastructure PR #16 (the constrained identity profile policy) was reviewed and
+squash-merged as `81859e4411b33b218854618a8e07db859c5a1ca7`.
+[Publication run 35130624204](https://github.com/biozal/cartyx-infrastructure/actions/runs/35130624204)
+built both images natively on amd64 and arm64. Before publishing, each build passed
+the handler backport tests, 1,315 identity-policy structural and authenticated
+protocol assertions, dependency checksum and runtime checks, vulnerability scans,
+TLS/authentication, persistence and independent-volume restore. Neither JanusGraph
+scan has a HIGH/CRITICAL finding. Cassandra's only finding is the existing scoped
+SnakeYAML exception (`CVE-2022-1471`).
+
+This change selects the following OCI index digests in both Chart and Compose:
+
+- cassandra: `ghcr.io/biozal/cartyx-cassandra@sha256:a8705b2f7660013a90eeba260521fe640d320da91fdf11c7dcd94ab3f9f0ebd8`
+- janusgraph: `ghcr.io/biozal/cartyx-janusgraph@sha256:ebd0c068c444e2f8685117bb9cd104687304edb8553a1d575c8e493e8bfb849b`
+
+Anonymous registry requests re-hashed each index and confirmed it lists exactly
+linux/amd64 and linux/arm64. Each architecture's manifest and config digest
+matched the tested CI artifact and source revision:
+
+| Image | amd64 manifest | arm64 manifest |
+|---|---|---|
+| cassandra | `sha256:c73986c647c4fc207b3500a9b12e58894ee29de818a7e260c2a6cb401c006e5f` | `sha256:edb6b1f7545d6177f22af58cb1dd905a00fce2d1292797eb0d22d9ef826c3f11` |
+| janusgraph | `sha256:ffd632abfb4a96620e500033f03f6e312f1fe441a3ef7b8564461f221622bb95` | `sha256:00e4a7330e7509c63945c508e8be8b4953036303790d2a41a1c40a9e9b25e7c7` |
+
+The same change also selects the complete identity policy boundary: the guarded
+channelizer, the GraphSON decoder, the Authorizer, a 64 KiB content limit, and the
+`cartyx_identity` principal read from the new `gremlin-identity-password` Secret
+key. `security.mjs` now verifies that principal's denials, continued operator
+access and the closing of GraphBinary connections, in CI and on every cluster
+restore. Storage versions and graph schema are unchanged.
+
+Provision the new key (`kubernetes.mjs provision-secret <env>`) BEFORE an
+environment reconciles this revision; JanusGraph fails closed without it. Dev
+follows main. Production stays on `data-v0.1.1` until a separately reviewed
+immutable tag. Take and verify an off-host dev backup before the upgrade, then
+validate the upgrade and a fresh-volume restore. Keep the previous image
+references and chart revision to recover from the pre-upgrade archive. No
+application deployment receives graph credentials from this change, and Mongo
+remains authoritative.

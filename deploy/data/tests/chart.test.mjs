@@ -62,6 +62,7 @@ for (const environment of ['local', 'dev', 'prod']) {
     const graphSecrets = deployment.spec.template.spec.volumes.find((v) => v.name === 'secrets')
       .secret.items;
     assert.ok(!graphSecrets.some((s) => s.key === 'cassandra-admin-password'));
+    assert.ok(graphSecrets.some((s) => s.key === 'gremlin-identity-password'));
     assert.equal(deployment.spec.strategy.type, 'Recreate');
     const policy = resources.find((r) => r.kind === 'NetworkPolicy');
     assert.deepEqual(policy.spec.policyTypes, ['Ingress', 'Egress']);
@@ -72,6 +73,18 @@ for (const environment of ['local', 'dev', 'prod']) {
     assert.match(config['cassandra-start.sh'], /optional: false/);
     assert.match(config['janusgraph-config.groovy'], /SimpleAuthenticator/);
     assert.match(config['janusgraph-config.groovy'], /enabled: true/);
+    // The identity policy is one inseparable server boundary: never only the Authorizer.
+    const graphConfig = config['janusgraph-config.groovy'];
+    for (const selected of [
+      /config\.channelizer = 'io\.cartyx\.graph\.IdentityChannelizer'/,
+      /authorizer: 'io\.cartyx\.graph\.IdentityProfileAuthorizer', config: \[:\]/,
+      /config\.serializers = \[\[className: 'io\.cartyx\.graph\.IdentityGraphSONSerializer'/,
+      /config\.maxContentLength = 65536/,
+      /config\.evaluationTimeout = 15000/,
+      /user\('cartyx_identity', identityPassword\)/,
+    ])
+      assert.match(graphConfig, selected);
+    assert.doesNotMatch(graphConfig, /GraphSONMessageSerializerV3|GraphBinary/);
     for (const name of Object.keys(config)) {
       assert.equal(config[name], readFileSync(`${chart}/files/${name}`, 'utf8'));
     }
