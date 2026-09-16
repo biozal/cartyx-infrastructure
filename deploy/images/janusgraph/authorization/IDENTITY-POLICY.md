@@ -43,6 +43,30 @@ lambda and all unknown typed values are rejected before typed deserialization.
 Malformed binary UTF-8 is rejected. Responses retain normal GraphSON serialization.
 Decoder errors contain no payload or exception cause.
 
+## Pre-authentication resource bounds
+
+A live dev review on 2026-09-16 found three upstream behaviors that let a client
+consume server memory or connections before logging in. The channelizer now
+bounds each one:
+
+- **Compression:** TinkerPop enables permessage-deflate with Netty's unlimited
+  inflation (`maxAllocation` 0). A frame of a few KB inflated to 8 MB and was
+  decoded before authentication, although the frame limit is 64 KiB. The
+  compression handler is removed, so the extension is never negotiated. Frames
+  with RSV bits set, fragments and continuation frames are closed without being
+  decoded.
+- **Unbounded request queueing:** SASL authentication keeps every request that
+  arrives before login in an unbounded list, and a failed login never closes
+  the connection. `AuthenticationGate` closes a connection that sends more than
+  8 non-authentication requests or more than 4 authentication messages before
+  it authenticates. It also closes any connection not authenticated within 15
+  seconds. The gate removes itself after a successful login.
+- **Idle connections:** TinkerPop's default idle timeout is 0, which disables
+  it. Startup now requires an idle timeout greater than 0 and at most 5 minutes.
+  The deployed value is 60 seconds without inbound bytes.
+
+Connection-count limits remain the job of the NetworkPolicy and the platform.
+
 The channelizer closes unsupported binary MIME types before TinkerPop can select
 its default GraphBinary serializer. Text uses the same guarded JSON serializer;
 close-frame payloads are never deserialized. Plain HTTP evaluation is unsupported.
@@ -56,6 +80,7 @@ All three classes are selected together; the deployed configuration is equivalen
 channelizer: io.cartyx.graph.IdentityChannelizer
 evaluationTimeout: 15000
 maxContentLength: 65536
+idleConnectionTimeout: 60000
 authentication:
   authenticator: org.apache.tinkerpop.gremlin.server.auth.SimpleAuthenticator
   config: {credentialsDb: /path/to/private/credentials.properties}
@@ -77,7 +102,7 @@ application exporter must match this fixture; traversal changes require coordina
 policy changes rather than broadening the service permission to general Gremlin.
 
 The image build compiles the Java 11 policy into a deterministic, checksum-locked
-JAR containing exactly five production classes. The test harness runs from the
+JAR containing exactly six production classes. The test harness runs from the
 packaged JAR, with no test classes in the final image. It exercises:
 
 - The actual client fixtures, all 128 optional-property subsets, structural and
@@ -90,6 +115,12 @@ packaged JAR, with no test classes in the final image. It exercises:
 - Repeated creates and a changed-content retry against an existing revision,
   verifying unchanged graph contents and exact vertex/edge counts.
 - Decoder/authorization failure privacy and rejected frame buffer release.
+- No compression negotiation. Compressed, fragmented and continuation frames
+  close promptly. Excess pre-authentication requests and repeated failed logins
+  close promptly. Channels that never authenticate close at the deadline, and
+  idle authenticated connections are closed. Startup refuses a missing or
+  unbounded idle timeout. Mutation checks confirmed that each live test fails
+  without its fix.
 
 These are authenticated protocol tests against TinkerGraph, not the completed
 JanusGraph/CQL runtime integration or a production readiness claim. Native image

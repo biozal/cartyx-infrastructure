@@ -6,7 +6,7 @@ import java.util.zip.*;
 /** Deterministic, explicitly enumerated policy JAR. No test classes or classpath overlays. */
 public final class PackPolicy {
     public static void main(String[] args) throws Exception {
-        List<String> classes = new ArrayList<>(List.of("IdentityChannelizer", "IdentityChannelizer$MimeGuard",
+        List<String> classes = new ArrayList<>(List.of("IdentityChannelizer", "IdentityChannelizer$AuthenticationGate", "IdentityChannelizer$MimeGuard",
                 "IdentityChannelizer$RequestGate", "IdentityGraphSONSerializer", "IdentityProfileAuthorizer"));
         Collections.sort(classes);
         Path source = Path.of(args[0], "io/cartyx/graph");
