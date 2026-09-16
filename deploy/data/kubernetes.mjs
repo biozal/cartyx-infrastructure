@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const [action, environment] = process.argv.slice(2);
@@ -90,17 +90,48 @@ const existing = kubectl([
   '-o',
   'name',
 ]).trim();
+const directory = resolve(`.local/data/${environment}`);
+const identityKey = 'gremlin-identity-password';
 if (existing) {
-  console.log(`Keeping existing ${namespace}/cartyx-data Secret; no rotation performed`);
+  const secret = JSON.parse(kubectl(['get', 'secret', 'cartyx-data', '-o', 'json']));
+  if (secret.data?.[identityKey]) {
+    console.log(`Keeping existing ${namespace}/cartyx-data Secret; no rotation performed`);
+    process.exit(0);
+  }
+  // Add only the independent identity-service credential. Every existing key is
+  // left untouched, and a concurrent Secret change fails the precondition.
+  if (!existsSync(`${directory}/tls.p12`))
+    throw new Error(`Existing Secret needs ${identityKey}; restore .local/data/${environment} first`);
+  execFileSync(process.execPath, ['deploy/data/secrets.mjs', environment], { stdio: 'inherit' });
+  const value = readFileSync(`${directory}/${identityKey}`);
+  if (value.toString('utf8').trim().length < 32) throw new Error(`Invalid ${identityKey}`);
+  if (secret.data?.['gremlin-password'] && Buffer.from(secret.data['gremlin-password'], 'base64').equals(value))
+    throw new Error(`${identityKey} must differ from the operator credential`);
+  const scratch = mkdtempSync(resolve('.local/data/.patch-'));
+  try {
+    const patch = `${scratch}/patch.json`;
+    writeFileSync(
+      patch,
+      JSON.stringify([
+        { op: 'test', path: '/metadata/resourceVersion', value: secret.metadata.resourceVersion },
+        { op: 'add', path: `/data/${identityKey}`, value: value.toString('base64') },
+      ]),
+      { mode: 0o600, flag: 'wx' }
+    );
+    kubectl(['patch', 'secret', 'cartyx-data', '--type=json', `--patch-file=${patch}`]);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+  console.log(`Added ${identityKey} to ${namespace}/cartyx-data; existing keys unchanged`);
   process.exit(0);
 }
 execFileSync(process.execPath, ['deploy/data/secrets.mjs', environment], { stdio: 'inherit' });
-const directory = resolve(`.local/data/${environment}`);
 const files = [
   'tls.p12',
   'tls.crt',
   'tls-password',
   'gremlin-password',
+  identityKey,
   'cassandra-admin-password',
   'cassandra-graph-password',
   'cassandra-state-password',

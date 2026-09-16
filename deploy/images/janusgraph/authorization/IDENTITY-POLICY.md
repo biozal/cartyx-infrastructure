@@ -1,7 +1,11 @@
 # Identity profile authorization candidate
 
-This module is packaged and tested in the candidate image. It is **not enabled**
-in Chart/Compose, and it does not provision credentials. Mongo remains active.
+This module is packaged in the published database image and selected, as one
+complete boundary, by the Chart/Compose JanusGraph configuration
+(`deploy/charts/cartyx-data/files/janusgraph-config.groovy`). The server creates
+the `cartyx_identity` principal from the separate `gremlin-identity-password`
+Secret key. No application deployment receives that credential yet, and no
+application backend selects graph identity storage. Mongo remains active.
 Its application contract is the immutable profile store in application PR #557.
 
 ## Boundary
@@ -46,7 +50,7 @@ Startup refuses an incompatible serializer, authorizer, authenticator, custom
 authentication handler, unbounded evaluation timeout or oversized frame setting.
 The previously deployed request-local handler backport remains unchanged.
 
-All three classes must be selected together when activation is separately tested:
+All three classes are selected together; the deployed configuration is equivalent to:
 
 ```yaml
 channelizer: io.cartyx.graph.IdentityChannelizer
@@ -92,11 +96,24 @@ JanusGraph/CQL runtime integration or a production readiness claim. Native image
 CI separately verifies the candidate's dependency checksums/scans, JanusGraph TLS,
 authentication, persistence and independent-volume recovery using operator access.
 
-Remaining activation gates: review/publish the candidate, verify native digests,
-test the configured policy with the application against real JanusGraph (including
-concurrent immutable publication and restart/recovery), provision a distinct service
-secret only through the tested boundary, promote dev with backup/restore evidence,
-and promote production through an immutable release. Do not mount operator secrets
-in application pods or select target identity storage before all migration gates pass.
+Completed before configuration: pre-publication review, native publication and
+architecture digest verification, and the application's real JanusGraph/Cassandra
+configured-policy gate (concurrent immutable publication, restart and
+independent-volume recovery). `deploy/data/security.mjs` now checks every
+configured environment, including cluster restores: the identity principal
+authenticates but is denied scripts, general traversals and mutation; operator
+scripts still work; GraphBinary connections are closed.
+
+Credential provisioning: `node deploy/data/kubernetes.mjs provision-secret <env>`
+adds only `gremlin-identity-password` to an existing `cartyx-data` Secret
+(resourceVersion-guarded, value never on the command line). JanusGraph refuses to
+start without it, or if it is shorter than 32 characters or equals the operator
+password. Provision it BEFORE an environment receives this chart revision.
+
+Remaining gates: dev promotion with backup/restore evidence, a separate
+application-namespace Secret carrying only the identity credential and CA,
+and production promotion through an immutable release. Do not mount operator
+secrets in application pods or select target identity storage before all
+migration gates pass.
 
 Primary protocol reference: [pinned TinkerPop 3.7.6 server source](https://github.com/apache/tinkerpop/tree/3.7.6/gremlin-server/src/main/java/org/apache/tinkerpop/gremlin/server).

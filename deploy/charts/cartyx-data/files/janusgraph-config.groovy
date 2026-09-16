@@ -33,6 +33,12 @@ credentials.setProperty('gremlin.tinkergraph.graphFormat', 'gryo')
 new File(root + '/credentials.kryo').delete()
 def authGraph = TinkerGraph.open(credentials)
 authGraph.traversal(CredentialTraversalSource.class).user('cartyx_admin', readSecret('gremlin-password')).iterate()
+// Trusted identity-service principal, restricted by IdentityProfileAuthorizer to
+// exact immutable-profile bytecode. Never mount the operator password into apps.
+def identityPassword = readSecret('gremlin-identity-password')
+if (identityPassword.length() < 32 || identityPassword == readSecret('gremlin-password'))
+    throw new IllegalStateException('Identity graph credential must be distinct and at least 32 characters')
+authGraph.traversal(CredentialTraversalSource.class).user('cartyx_identity', identityPassword).iterate()
 authGraph.close()
 def authProps = new Properties()
 credentials.getKeys().each { k -> authProps.setProperty(k, credentials.getString(k)) }
@@ -48,7 +54,12 @@ config.authentication = [authenticator: 'org.apache.tinkerpop.gremlin.server.aut
 config.ssl = [enabled: true, keyStore: '/secrets/tls.p12', keyStoreType: 'PKCS12',
     keyStorePassword: readSecret('tls-password')]
 config.metrics = [slf4jReporter: [enabled: true, interval: 60000]]
-config.serializers = [[className: 'org.apache.tinkerpop.gremlin.util.ser.GraphSONMessageSerializerV3',
+// The policy, guarded GraphSON decoder and full-request gate are one boundary.
+// IdentityChannelizer refuses to start unless all of them are selected together.
+config.channelizer = 'io.cartyx.graph.IdentityChannelizer'
+config.maxContentLength = 65536
+config.authorization = [authorizer: 'io.cartyx.graph.IdentityProfileAuthorizer', config: [:]]
+config.serializers = [[className: 'io.cartyx.graph.IdentityGraphSONSerializer',
     config: [ioRegistries: ['org.janusgraph.graphdb.tinkerpop.JanusGraphIoRegistry']]]]
 new File(root + '/server.yaml').text = yaml.dump(config)
-println('JanusGraph TLS/authentication configuration ready')
+println('JanusGraph TLS/authentication/identity-policy configuration ready')
