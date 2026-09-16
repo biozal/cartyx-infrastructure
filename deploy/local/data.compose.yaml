@@ -1,7 +1,7 @@
 # Included by compose.yaml, also usable independently without application .env.
 services:
   cassandra:
-    image: ${CARTYX_CASSANDRA_IMAGE:-ghcr.io/biozal/cartyx-cassandra@sha256:a8705b2f7660013a90eeba260521fe640d320da91fdf11c7dcd94ab3f9f0ebd8}
+    image: ${CARTYX_CASSANDRA_IMAGE:-ghcr.io/biozal/cartyx-cassandra@sha256:69b8820823c2144d69212d0d996c70faaa8043f28f764d45e85a9d7a7cf9d85a}
     entrypoint: [bash, /config/cassandra-start.sh]
     environment:
       CASSANDRA_CLUSTER_NAME: cartyx-local
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
 
   cassandra-init:
-    image: ${CARTYX_CASSANDRA_IMAGE:-ghcr.io/biozal/cartyx-cassandra@sha256:a8705b2f7660013a90eeba260521fe640d320da91fdf11c7dcd94ab3f9f0ebd8}
+    image: ${CARTYX_CASSANDRA_IMAGE:-ghcr.io/biozal/cartyx-cassandra@sha256:69b8820823c2144d69212d0d996c70faaa8043f28f764d45e85a9d7a7cf9d85a}
     entrypoint: [python3, /config/cassandra-admin.py, bootstrap]
     environment:
       CASSANDRA_HOST: cassandra
@@ -41,7 +41,7 @@ services:
     restart: 'no'
 
   janusgraph:
-    image: ${CARTYX_JANUSGRAPH_IMAGE:-ghcr.io/biozal/cartyx-janusgraph@sha256:ebd0c068c444e2f8685117bb9cd104687304edb8553a1d575c8e493e8bfb849b}
+    image: ${CARTYX_JANUSGRAPH_IMAGE:-ghcr.io/biozal/cartyx-janusgraph@sha256:1ecf29b82909bf3ea5c39aa0af7e9f065600c3924f4729ec49bb999dda9f3ba8}
     entrypoint: [bash, /config/janusgraph-start.sh]
     environment:
       CASSANDRA_HOST: cassandra
