@@ -15,10 +15,15 @@ COPY authorization/ authorization/
 RUN javac --release 11 -g:none -cp 'target/lib/*' -d target/tests authorization/AuthorizationHandlersTest.java \
     && java -cp 'target/tests:target/lib/*' AuthorizationHandlersTest baseline > target/authorization-baseline.log 2>&1 \
     && tail -n 1 target/authorization-baseline.log \
-    && javac --release 11 -g:none -cp 'target/lib/*' -d target/authorization authorization/src/*.java \
+    && javac --release 11 -g:none -cp 'target/lib/*' -d target/authorization authorization/src/WebSocketAuthorizationHandler.java authorization/src/HttpBasicAuthorizationHandler.java \
     && java authorization/PatchJar.java target/lib/gremlin-server-3.7.6.jar target/authorization target/gremlin-server-patched.jar \
     && mv target/gremlin-server-patched.jar target/lib/gremlin-server-3.7.6.jar \
     && java -cp 'target/tests:target/lib/*' AuthorizationHandlersTest
+RUN javac --release 11 -g:none -cp 'target/lib/*' -d target/policy authorization/src/Identity*.java \
+    && java authorization/PackPolicy.java target/policy target/lib/cartyx-identity-authorization-1.jar \
+    && javac --release 11 -g:none -cp 'target/lib/*' -d target/tests authorization/IdentityAuthorizationTest.java \
+    && java -cp 'target/tests:target/lib/*' io.cartyx.graph.IdentityAuthorizationTest authorization/profile-requests.json > target/identity-policy-test.log 2>&1 \
+    && tail -n 1 target/identity-policy-test.log
 
 FROM janusgraph/janusgraph:1.1.0@sha256:75f57aff4b152ca86b4cdaeefb5335154d7fad412cffef75fa44c7504adc96d4 AS upstream
 FROM eclipse-temurin:11.0.32_9-jre-noble@sha256:c55276a409ff48855ce7011fda07da527c41d57cc63b3381533fb7fea3ae027a

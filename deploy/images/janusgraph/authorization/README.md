@@ -65,3 +65,12 @@ processors/sessions, deserialization and concurrent connection behavior. The sto
 handler's special treatment of close requests is unchanged. Authorizer callbacks
 must themselves be thread-safe. User/campaign authorization remains a separate
 application responsibility. This backport does not close that larger cutover gate.
+
+## Identity policy candidate
+
+The image also packages a separate, checksum-locked identity policy JAR and runs
+its authenticated protocol tests during the build. It is not configured in deployed
+Chart/Compose and creates no runtime account. See [IDENTITY-POLICY.md](IDENTITY-POLICY.md)
+for the exact permissions, decoder/processor boundary, client fixture contract and
+remaining real-JanusGraph activation gates. The two handler replacements above are
+unchanged.
