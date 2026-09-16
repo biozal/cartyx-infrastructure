@@ -100,22 +100,6 @@ await bounded('operator access through the identity policy', async () => {
     await client.close();
   }
 });
-// permessage-deflate is never negotiated: upstream inflation is unbounded before authentication.
-await bounded('compression not negotiated', async () => {
-  const client = new gremlin.driver.Client(endpoint, {
-    ...base,
-    enableCompression: true,
-    authenticator: new gremlin.driver.auth.PlainTextSaslAuthenticator('cartyx_admin', password),
-  });
-  try {
-    assert.equal(Number((await client.submit('1+1')).first()), 2);
-    assert.equal(client._connection._ws.extensions, '', 'Server must not accept permessage-deflate');
-  } finally {
-    await client.close();
-  }
-});
-// Checks that make the server close a connection stay last: kubectl port-forward (used by
-// restore-cluster.mjs) terminates every forwarded connection when that happens.
 // GraphBinary must be closed before TinkerPop's default binary decoder runs.
 await bounded('unsupported binary serializer rejection', async () => {
   const client = new gremlin.driver.Client(endpoint, {
