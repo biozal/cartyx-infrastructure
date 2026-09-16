@@ -184,3 +184,47 @@ validate the upgrade and a fresh-volume restore. Keep the previous image
 references and chart revision to recover from the pre-upgrade archive. No
 application deployment receives graph credentials from this change, and Mongo
 remains authoritative.
+
+## September 16 pre-authentication hardening promotion
+
+An adversarial review of the live dev identity boundary reproduced three upstream
+Gremlin Server behaviors that let an unauthenticated client consume resources:
+
+- **Unbounded inflation:** a permessage-deflate frame of a few KB was inflated to
+  8 MB and decoded before authentication.
+- **Unbounded request retention:** 60 KB requests sent before login were held
+  silently with no limit, and failed logins never closed the connection.
+- **No idle timeout:** the idle-connection timeout defaulted to disabled.
+
+Infrastructure PR #18, merged as `124c6a95c6dfdc2f66e65853da4697c177f1dce6`, bounds
+all three:
+
+- Compression is never negotiated.
+- Compressed (RSV-flagged), fragmented and continuation frames are closed.
+- Connections close after more than 8 pre-authentication requests or more than 4
+  login attempts, or if not authenticated within 15 seconds.
+- Startup requires an idle timeout; the deployed value is 60 seconds.
+
+The policy harness grew from 1,315 to 1,353 assertions, and each live test was
+mutation-checked. The policy JAR is locked at `d702e22c…`.
+[Publication run 35142388352](https://github.com/biozal/cartyx-infrastructure/actions/runs/35142388352)
+passed native amd64/arm64 builds, scans (no unexcepted HIGH/CRITICAL findings; the
+Cassandra SnakeYAML exception is unchanged) and independent restore.
+
+This change selects the following OCI index digests in both Chart and Compose:
+
+- cassandra: `ghcr.io/biozal/cartyx-cassandra@sha256:69b8820823c2144d69212d0d996c70faaa8043f28f764d45e85a9d7a7cf9d85a`
+- janusgraph: `ghcr.io/biozal/cartyx-janusgraph@sha256:1ecf29b82909bf3ea5c39aa0af7e9f065600c3924f4729ec49bb999dda9f3ba8`
+
+Anonymous registry requests re-hashed each index (exactly linux/amd64 and
+linux/arm64). They matched each architecture's manifest and config digest to the
+tested CI artifacts:
+
+| Image | amd64 manifest | arm64 manifest |
+|---|---|---|
+| cassandra | `sha256:6c7d9524d8d36745e95eb7362677b57814a240562f544039f98bb98bbb6b8b17` | `sha256:8abf17233a7b6e799e180862ed6ea38dedff52bcb6cea1711f3e7301b35bf955` |
+| janusgraph | `sha256:835f33326486056c2c5d859e82040989c32ceae04ffef5014bba53796da9a39c` | `sha256:f67b46d3e583a6e40d483147d8d28bb1dc391762e51d590a56131909aa276dfb` |
+
+`security.mjs` now also verifies, in CI and on every cluster restore, that the
+server never negotiates compression. Dev follows main; production stays on
+`data-v0.1.1`.
