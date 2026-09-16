@@ -18,6 +18,12 @@ for (handler in [org.apache.tinkerpop.gremlin.server.handler.WebSocketAuthorizat
   assert !handler.declaredFields.any { it.type == org.apache.tinkerpop.gremlin.server.auth.AuthenticatedUser }
   assert handler.classLoader.getResources(handler.name.replace('.', '/') + '.class').toList().size() == 1
 }
+for (policy in [io.cartyx.graph.IdentityProfileAuthorizer, io.cartyx.graph.IdentityGraphSONSerializer,
+                io.cartyx.graph.IdentityChannelizer]) {
+  assert policy.classLoader.getResources(policy.name.replace('.', '/') + '.class').toList().size() == 1
+}
+try { Class.forName('io.cartyx.graph.IdentityAuthorizationTest'); assert false : 'Test harness in runtime' }
+catch (ClassNotFoundException expected) { }
 assert !new File('/usr/bin/yq').exists()
 for (name in ['org.apache.hadoop.conf.Configuration', 'org.apache.spark.SparkContext', 'org.apache.hadoop.hbase.client.Connection']) {
   try { Class.forName(name); assert false : "Unexpected optional backend: " + name }
