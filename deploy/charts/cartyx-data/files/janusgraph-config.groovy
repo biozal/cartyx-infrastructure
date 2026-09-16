@@ -58,6 +58,8 @@ config.metrics = [slf4jReporter: [enabled: true, interval: 60000]]
 // IdentityChannelizer refuses to start unless all of them are selected together.
 config.channelizer = 'io.cartyx.graph.IdentityChannelizer'
 config.maxContentLength = 65536
+// Close connections with no inbound bytes for 60 s (required and bounded by the channelizer).
+config.idleConnectionTimeout = 60000
 config.authorization = [authorizer: 'io.cartyx.graph.IdentityProfileAuthorizer', config: [:]]
 config.serializers = [[className: 'io.cartyx.graph.IdentityGraphSONSerializer',
     config: [ioRegistries: ['org.janusgraph.graphdb.tinkerpop.JanusGraphIoRegistry']]]]

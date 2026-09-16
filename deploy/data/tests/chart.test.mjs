@@ -81,6 +81,7 @@ for (const environment of ['local', 'dev', 'prod']) {
       /config\.serializers = \[\[className: 'io\.cartyx\.graph\.IdentityGraphSONSerializer'/,
       /config\.maxContentLength = 65536/,
       /config\.evaluationTimeout = 15000/,
+      /config\.idleConnectionTimeout = 60000/,
       /user\('cartyx_identity', identityPassword\)/,
     ])
       assert.match(graphConfig, selected);

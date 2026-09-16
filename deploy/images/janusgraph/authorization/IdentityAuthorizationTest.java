@@ -5,6 +5,7 @@ import org.apache.tinkerpop.gremlin.groovy.jsr223.dsl.credential.CredentialTrave
 import org.apache.tinkerpop.gremlin.process.traversal.Bytecode;
 import org.apache.tinkerpop.gremlin.server.*;
 import org.apache.tinkerpop.gremlin.server.auth.*;
+import org.apache.tinkerpop.gremlin.server.handler.StateKey;
 import org.apache.tinkerpop.gremlin.server.authz.AuthorizationException;
 import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph;
 import org.apache.tinkerpop.gremlin.util.message.*;
@@ -138,11 +139,88 @@ public final class IdentityAuthorizationTest {
         try { SERIALIZER.deserializeRequest(invalidUtf8); throw new AssertionError("Invalid UTF-8 accepted"); }
         catch (SerializationException expected) { check(expected.getCause() == null, "UTF-8 failure privacy"); }
         finally { invalidUtf8.release(); }
-        for (WebSocketFrame frame : List.of(new BinaryWebSocketFrame(Unpooled.buffer().writeByte(100)), new BinaryWebSocketFrame(Unpooled.buffer()), new CloseWebSocketFrame())) {
+        // Compressed (RSV), fragmented and continuation frames are never inflated, aggregated or decoded.
+        for (WebSocketFrame frame : List.of(new BinaryWebSocketFrame(Unpooled.buffer().writeByte(100)), new BinaryWebSocketFrame(Unpooled.buffer()), new CloseWebSocketFrame(),
+                new TextWebSocketFrame(true, 4, "{}"), new TextWebSocketFrame(false, 0, "{"), new ContinuationWebSocketFrame(true, 0, "}"),
+                new BinaryWebSocketFrame(true, 2, Unpooled.buffer().writeByte(0)))) {
             EmbeddedChannel channel = new EmbeddedChannel(new IdentityChannelizer.MimeGuard());
             try { channel.writeInbound(frame); check(!channel.isOpen() && frame.refCnt() == 0 && channel.readInbound() == null, "Malformed/close frame released before deserialization"); }
             finally { channel.finishAndReleaseAll(); }
         }
+    }
+
+    private static void gateTests() {
+        TextWebSocketFrame plain = new TextWebSocketFrame("{}");
+        EmbeddedChannel text = new EmbeddedChannel(new IdentityChannelizer.MimeGuard());
+        try { text.writeInbound(plain); check(text.isOpen() && text.readInbound() == plain, "Plain final text frame forwarded"); }
+        finally { text.finishAndReleaseAll(); }
+        RequestMessage request = RequestMessage.build("eval").create();
+        RequestMessage authentication = RequestMessage.build("authentication").addArg("sasl", "x").create();
+        for (RequestMessage kind : List.of(request, authentication)) {
+            int limit = kind == request ? IdentityChannelizer.AuthenticationGate.MAX_PENDING : IdentityChannelizer.AuthenticationGate.MAX_AUTHENTICATION;
+            EmbeddedChannel channel = new EmbeddedChannel(new IdentityChannelizer.AuthenticationGate());
+            try {
+                for (int i = 0; i < limit; i++) { channel.writeInbound(kind); check(channel.isOpen() && channel.readInbound() == kind, "Bounded pre-authentication message forwarded"); }
+                channel.writeInbound(kind);
+                check(!channel.isOpen() && channel.readInbound() == null, "Excess pre-authentication message closes the channel");
+            } finally { channel.finishAndReleaseAll(); }
+        }
+        EmbeddedChannel slow = new EmbeddedChannel();
+        slow.freezeTime();
+        slow.pipeline().addLast(new IdentityChannelizer.AuthenticationGate());
+        slow.advanceTimeBy(IdentityChannelizer.AuthenticationGate.DEADLINE_MILLIS - 1, TimeUnit.MILLISECONDS); slow.runScheduledPendingTasks();
+        check(slow.isOpen(), "Authentication deadline not yet reached");
+        slow.advanceTimeBy(2, TimeUnit.MILLISECONDS); slow.runScheduledPendingTasks();
+        check(!slow.isOpen(), "Unauthenticated channel closed at the deadline");
+        slow.finishAndReleaseAll();
+        EmbeddedChannel done = new EmbeddedChannel();
+        done.freezeTime();
+        done.pipeline().addLast("gate", new IdentityChannelizer.AuthenticationGate());
+        done.attr(StateKey.AUTHENTICATED_USER).set(RUNTIME);
+        for (int i = 0; i <= IdentityChannelizer.AuthenticationGate.MAX_PENDING; i++) done.writeInbound(request);
+        check(done.isOpen() && done.pipeline().get("gate") == null, "Gate removes itself after authentication");
+        done.advanceTimeBy(IdentityChannelizer.AuthenticationGate.DEADLINE_MILLIS * 2, TimeUnit.MILLISECONDS); done.runScheduledPendingTasks();
+        check(done.isOpen(), "Authenticated channel survives the pre-authentication deadline");
+        done.finishAndReleaseAll();
+    }
+
+    /** Minimal client: offers permessage-deflate and writes masked raw frames. */
+    private static final class Raw implements AutoCloseable {
+        final Socket socket; final String handshake;
+        Raw(int port) throws Exception {
+            socket = new Socket("127.0.0.1", port); socket.setSoTimeout(10000);
+            socket.getOutputStream().write(("GET /gremlin HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                    + "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n"
+                    + "Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+            StringBuilder headers = new StringBuilder();
+            while (!headers.toString().endsWith("\r\n\r\n")) { int b = socket.getInputStream().read(); if (b < 0) break; headers.append((char) b); }
+            handshake = headers.toString();
+        }
+        void frame(int firstByte, byte[] payload) throws Exception {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            out.write(firstByte);
+            if (payload.length < 126) out.write(0x80 | payload.length);
+            else { out.write(0x80 | 126); out.write(payload.length >> 8); out.write(payload.length & 0xff); }
+            byte[] mask = {1, 2, 3, 4}; out.write(mask);
+            for (int i = 0; i < payload.length; i++) out.write(payload[i] ^ mask[i % 4]);
+            socket.getOutputStream().write(out.toByteArray()); socket.getOutputStream().flush();
+        }
+        /** True when the server closes (EOF, reset or close frame) without answering with a Gremlin response. */
+        boolean closedWithoutResponse() {
+            try {
+                int first = socket.getInputStream().read();
+                return first < 0 || (first & 0x0f) == 0x8;
+            } catch (SocketTimeoutException silent) { return false; }
+            catch (java.io.IOException closed) { return true; }
+        }
+        public void close() throws Exception { socket.close(); }
+    }
+    private static byte[] deflated(int size) {
+        java.util.zip.Deflater deflater = new java.util.zip.Deflater(java.util.zip.Deflater.DEFAULT_COMPRESSION, true);
+        deflater.setInput("a".repeat(size).getBytes(StandardCharsets.US_ASCII));
+        byte[] buffer = new byte[65536]; int length = deflater.deflate(buffer, 0, buffer.length, java.util.zip.Deflater.SYNC_FLUSH);
+        deflater.end();
+        return Arrays.copyOf(buffer, length - 4); // RFC 7692 strips the trailing 00 00 ff ff.
     }
 
     private static void operators(JsonNode node, String path, List<String> result) {
@@ -214,6 +292,7 @@ public final class IdentityAuthorizationTest {
         Settings settings = new Settings(); settings.host = "127.0.0.1";
         try (ServerSocket port = new ServerSocket(0, 0, InetAddress.getLoopbackAddress())) { settings.port = port.getLocalPort(); }
         settings.threadPoolWorker = 2; settings.gremlinPool = 2; settings.evaluationTimeout = 15000; settings.maxContentLength = 65536;
+        settings.idleConnectionTimeout = 2000;
         settings.channelizer = IdentityChannelizer.class.getName();
         settings.graphs = Map.of("graph", graphProperties.toString());
         settings.authentication.authenticator = SimpleAuthenticator.class.getName();
@@ -251,6 +330,38 @@ public final class IdentityAuthorizationTest {
                 mime.send("{}", "application/vnd.graphbinary-v1.0");
                 check("closed".equals(mime.replies.poll(10, TimeUnit.SECONDS)), "Unsupported MIME closes before fallback deserialization");
             }
+            // permessage-deflate is never negotiated; a compressed frame is refused before inflation.
+            try (Raw raw = new Raw(settings.port)) {
+                check(raw.handshake.startsWith("HTTP/1.1 101") && !raw.handshake.toLowerCase(Locale.ROOT).contains("permessage-deflate"), "Compression not negotiated");
+                raw.socket.setSoTimeout(1500);
+                raw.frame(0x80 | 0x40 | 0x1, deflated(8 * 1024 * 1024));
+                check(raw.closedWithoutResponse(), "Compressed frame promptly closes without inflation or response");
+            }
+            // Unauthenticated clients cannot queue unbounded requests or retry passwords indefinitely.
+            try (Wire flood = new Wire(settings.port)) {
+                flood.send(script("1").toString(), "application/vnd.gremlin-v3.0+json");
+                check(status(flood.response()) == 407, "Initial SASL challenge");
+                for (int i = 0; i < IdentityChannelizer.AuthenticationGate.MAX_PENDING; i++) flood.send(script("'" + "x".repeat(60000) + "'").toString(), "application/vnd.gremlin-v3.0+json");
+                check("closed".equals(flood.replies.poll(1500, TimeUnit.MILLISECONDS)), "Excess unauthenticated requests promptly close the connection");
+            }
+            try (Wire guess = new Wire(settings.port)) {
+                ObjectNode first = script("1");
+                check(status(guess.request(first)) == 407, "Guessing challenge");
+                ObjectNode auth = JSON.createObjectNode().put("op", "authentication").put("processor", "");
+                auth.set("requestId", first.get("requestId"));
+                auth.putObject("args").put("sasl", Base64.getEncoder().encodeToString("\0cartyx_admin\0wrong".getBytes(StandardCharsets.UTF_8)));
+                for (int i = 0; i < IdentityChannelizer.AuthenticationGate.MAX_AUTHENTICATION; i++) guess.send(auth.toString(), "application/vnd.gremlin-v3.0+json");
+                String reply; boolean closed = false;
+                guess.send(auth.toString(), "application/vnd.gremlin-v3.0+json");
+                while ((reply = guess.replies.poll(1500, TimeUnit.MILLISECONDS)) != null) if ("closed".equals(reply)) { closed = true; break; }
+                check(closed, "Repeated failed authentication promptly closes the connection");
+            }
+            // Authenticated connections are closed after the configured reader-idle period.
+            try (Wire idle = new Wire(settings.port)) {
+                check(status(idle.authenticate(script("1"), "cartyx_admin", password)) == 200, "Idle probe authenticated");
+                String reply = idle.replies.poll(10, TimeUnit.SECONDS);
+                check("closed".equals(reply), "Idle authenticated connection closed");
+            }
             ExecutorService pool = Executors.newFixedThreadPool(8);
             try {
                 List<Callable<Boolean>> tasks = new ArrayList<>();
@@ -273,6 +384,18 @@ public final class IdentityAuthorizationTest {
             }
         } finally {
             server.stop().get(20, TimeUnit.SECONDS);
+        }
+        try {
+            // The boundary refuses to start without a bounded idle timeout.
+            for (long idle : new long[]{0, 300001}) {
+                settings.idleConnectionTimeout = idle;
+                try (ServerSocket port = new ServerSocket(0, 0, InetAddress.getLoopbackAddress())) { settings.port = port.getLocalPort(); }
+                GremlinServer invalid = new GremlinServer(settings);
+                try { invalid.start().get(20, TimeUnit.SECONDS); throw new AssertionError("Unbounded idle timeout accepted"); }
+                catch (ExecutionException expected) { assertions.incrementAndGet(); }
+                finally { invalid.stop().get(20, TimeUnit.SECONDS); }
+            }
+        } finally {
             try (java.util.stream.Stream<Path> paths = Files.walk(root)) { for (Path path : (Iterable<Path>)paths.sorted(Comparator.reverseOrder())::iterator) Files.delete(path); }
         }
     }
@@ -292,6 +415,7 @@ public final class IdentityAuthorizationTest {
             for (JsonNode request : fixture.path("requests")) requests.add((ObjectNode)request);
         check(requests.size() == 18, "Expected client fixtures");
         structuralTests(requests);
+        gateTests();
         protocolTests(requests);
         check(LOGS.stream().noneMatch(value -> value.contains(PRIVATE)), "Denied payload absent from server logs");
         check(LOGS.stream().anyMatch(value -> value.contains("Invalid graph request")), "Captured decoder failures");
