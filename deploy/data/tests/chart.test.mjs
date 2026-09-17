@@ -58,7 +58,24 @@ for (const environment of ['local', 'dev', 'prod']) {
       sts.spec.template.spec.volumes.find((v) => v.name === 'data').persistentVolumeClaim.claimName,
       pvc.metadata.name
     );
+    const indexClaim = resources.find(
+      (r) => r.kind === 'PersistentVolumeClaim' && r.metadata.name === 'cartyx-data-janusgraph-index'
+    );
+    assert.equal(indexClaim.metadata.annotations['helm.sh/resource-policy'], 'keep');
+    assert.equal(indexClaim.metadata.annotations['kustomize.toolkit.fluxcd.io/prune'], 'disabled');
     const deployment = resources.find((r) => r.kind === 'Deployment');
+    assert.ok(
+      deployment.spec.template.spec.volumes.some(
+        (v) => v.persistentVolumeClaim?.claimName === indexClaim.metadata.name
+      ),
+      'JanusGraph mounts its search index volume'
+    );
+    assert.ok(
+      !sts.spec.template.spec.volumes?.some(
+        (v) => v.persistentVolumeClaim?.claimName === indexClaim.metadata.name
+      ),
+      'Cassandra never mounts the search index volume'
+    );
     const graphSecrets = deployment.spec.template.spec.volumes.find((v) => v.name === 'secrets')
       .secret.items;
     assert.ok(!graphSecrets.some((s) => s.key === 'cassandra-admin-password'));
@@ -81,6 +98,7 @@ for (const environment of ['local', 'dev', 'prod']) {
       /config\.serializers = \[\[className: 'io\.cartyx\.graph\.IdentityGraphSONSerializer'/,
       /config\.maxContentLength = 65536/,
       /config\.evaluationTimeout = 15000/,
+      /index\.search\.backend', 'lucene'/,
       /config\.idleConnectionTimeout = 60000/,
       /user\('cartyx_identity', identityPassword\)/,
     ])

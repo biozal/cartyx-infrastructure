@@ -92,6 +92,19 @@ the saved original state from the Lease, restores Cassandra and JanusGraph,
 waits for readiness, resumes Flux, then clears the Lease. Run another backup
 after recovery; the interrupted archive is not considered complete.
 
+## Search index
+
+JanusGraph runs an embedded Lucene mixed index (`index.search.backend=lucene`) on its
+own retained volume, mounted at `/var/lib/janusgraph/index`. This is valid only while
+exactly one JanusGraph instance runs, which the chart enforces with one replica and a
+`Recreate` strategy. Moving to multiple instances requires a networked index backend
+and a separate migration.
+
+The index is **not** part of the off-host backup: Cassandra holds the authoritative
+data, and `deploy/data/reindex.mjs` rebuilds every mixed index from it. Both the
+cluster restore and the local restore rehearsal run that rebuild before verifying, so
+a restore that silently lost search would fail the checks.
+
 ## Fresh-volume off-host restore
 
 ```bash

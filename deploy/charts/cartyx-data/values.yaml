@@ -15,6 +15,8 @@ cassandra:
     requests: { cpu: 500m, memory: 2Gi }
     limits: { cpu: '2', memory: 3Gi }
 janusgraph:
+  indexStorageClass: cartyx-data-retain
+  indexStorage: 5Gi
   image: ghcr.io/biozal/cartyx-janusgraph@sha256:1ecf29b82909bf3ea5c39aa0af7e9f065600c3924f4729ec49bb999dda9f3ba8
   replicas: 1
   resources:

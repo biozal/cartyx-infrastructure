@@ -19,6 +19,11 @@ graphConfig.setProperty('storage.cql.ssl.enabled', 'true')
 graphConfig.setProperty('storage.cql.ssl.hostname_validation', 'true')
 graphConfig.setProperty('storage.cql.ssl.truststore.location', '/secrets/tls.p12')
 graphConfig.setProperty('storage.cql.ssl.truststore.password', readSecret('tls-password'))
+// Embedded mixed index for word search. Valid only while a single JanusGraph instance
+// runs (Deployment replicas 1, Recreate). The directory is a separate retained volume;
+// after a restore it is rebuilt from Cassandra rather than recovered from a backup.
+graphConfig.setProperty('index.search.backend', 'lucene')
+graphConfig.setProperty('index.search.directory', System.getenv('JANUSGRAPH_INDEX_DIR') ?: '/var/lib/janusgraph/index')
 graphConfig.setProperty('schema.default', 'none')
 graphConfig.setProperty('query.force-index', 'true')
 graphConfig.setProperty('cache.db-cache', 'false')

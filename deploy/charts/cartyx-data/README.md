@@ -121,6 +121,10 @@ mark production complete from rendered manifests, local tests or dev readiness.
    the same tag promotion; infrastructure main changes alone do not advance the
    production chart.
 
+JanusGraph also claims a small retained volume for its embedded Lucene search index,
+separate from the Cassandra data claim. It is rebuilt from Cassandra after a restore
+(`deploy/data/reindex.mjs`) rather than recovered from a backup.
+
 This is an explicitly single-node topology. RF 1 with LOCAL_QUORUM is one
 replica's acknowledgment; it is not host-failure tolerance. Scaling values other
 than one are rejected. Adding real HA requires new hosts, replication migration,
