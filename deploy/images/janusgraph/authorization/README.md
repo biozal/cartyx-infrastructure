@@ -66,11 +66,11 @@ handler's special treatment of close requests is unchanged. Authorizer callbacks
 must themselves be thread-safe. User/campaign authorization remains a separate
 application responsibility. This backport does not close that larger cutover gate.
 
-## Identity policy candidate
+## Application traversal policy
 
-The image also packages a separate, checksum-locked identity policy JAR and runs
-its authenticated protocol tests during the build. It is not configured in deployed
-Chart/Compose and creates no runtime account. See [IDENTITY-POLICY.md](IDENTITY-POLICY.md)
-for the exact permissions, decoder/processor boundary, client fixture contract and
-remaining real-JanusGraph activation gates. The two handler replacements above are
-unchanged.
+The image also packages a separate, checksum-locked policy JAR and runs its
+authenticated protocol tests during the build. It is configured in deployed
+Chart/Compose and creates the `cartyx_app` service principal. See
+[APP-POLICY.md](APP-POLICY.md) for the allowed step vocabulary, the decoder and
+request boundary, the pre-authentication bounds and what the application must still
+authorize itself. The two handler replacements above are unchanged.

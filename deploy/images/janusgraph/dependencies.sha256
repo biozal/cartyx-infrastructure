@@ -1,4 +1,4 @@
-27aec6803b9426da152de219e31783d52d89f486dd635c5a426cf6d321c58542  lib/amqp-client-5.33.1.jar
+407bab4db77453b42b052554934095873db0f1c9b8018aebb97f19eb9f5575fa  lib/amqp-client-5.34.0.jar
 a80502c3140ae7acfbb1f57847c8eb1c101461a969215ec38c3f1ebdff61ac29  lib/antlr4-runtime-4.9.1.jar
 b9d4fe4d71938df38839f0eca42aaaa64cf8b313d678da036f0cb3ca199b47f5  lib/asm-9.2.jar
 878fbe521731c072d14d2d65b983b1beae6ad06fda0007b6a8bae81f73f433c4  lib/asm-analysis-9.2.jar
@@ -7,7 +7,7 @@ ff5b3cd331ae8a9a804768280da98f50f424fef23dd3c788bb320e08c94ee598  lib/asm-util-9
 fb24afe1b9461065e70464749b3b166fc6b29ef4676feff367cf93408823728a  lib/ayza-10.0.0.jar
 9d0826965dbbc3c27b8927328af07b14435883c52b64de3134bab83979af9daf  lib/ayza-for-netty-10.0.0.jar
 1e0a7bbef1dd791653143f3f05d0e489934bf5481e58a87c9e619cd46b68729b  lib/caffeine-2.9.3.jar
-d702e22cbd9bb31b5335bdfa4a7c17503d14c6ff5c7f26e3bb15f578a3d677a1  lib/cartyx-identity-authorization-1.jar
+276151a0e0a8a3b3627ff736f5e5ccd1c7de617be4bc0e21d4e7fa1c2af268a6  lib/cartyx-identity-authorization-1.jar
 9e44ba68ec9a3f21286fa2a8bbb003b735c0f69101bb43144b79f4f8aaa74709  lib/commons-beanutils-1.11.0.jar
 f9f6cb103f2ddc3c99a9d80ada2ae7bf0685111fd6bffccb72033d1da4e6ff23  lib/commons-codec-1.17.1.jar
 eeeae917917144a68a741d4c0dff66aa5c5c5fd85593ff217bced3fc8ca783b8  lib/commons-collections-3.2.2.jar

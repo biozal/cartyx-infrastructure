@@ -15,7 +15,14 @@ import java.util.*;
 
 /** Reject active GraphSON types before the upstream typed deserializer sees a request. */
 public final class IdentityGraphSONSerializer implements MessageTextSerializer<ObjectMapper> {
-    private static final Set<String> TYPES = Set.of("g:UUID", "g:Bytecode", "g:Map", "g:List", "g:Int32", "g:Int64", "g:Double");
+    /**
+     * Inert request types only. Lambdas, classes, bindings, strategies and every unknown
+     * type are refused before the typed deserializer runs. Enum tokens and predicates are
+     * values, not code; the authorizer separately restricts which ones may appear.
+     */
+    private static final Set<String> TYPES = Set.of("g:UUID", "g:Bytecode", "g:Map", "g:List", "g:Set",
+            "g:Int32", "g:Int64", "g:Double", "g:Float", "g:Date", "g:Timestamp",
+            "g:P", "g:TextP", "g:T", "g:Order", "g:Scope", "g:Column", "g:Direction", "g:Cardinality", "g:Pop");
     private final GraphSONMessageSerializerV3 delegate = new GraphSONMessageSerializerV3();
     private final ObjectMapper plain = new ObjectMapper()
             .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
