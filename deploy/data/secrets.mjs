@@ -13,7 +13,7 @@ mkdirSync(parent, { recursive: true, mode: 0o700 });
 chmodSync(parent, 0o700);
 // Added after the initial credential set. Existing environments receive only this
 // missing, independent key; nothing else is rotated or rewritten.
-const identityKey = 'gremlin-identity-password';
+const appKey = 'gremlin-app-password';
 const writeKey = (key) =>
   // The containing parent is owner-only on the host; uid 999 containers need to
   // read the mounted files. Kubernetes uses a Secret volume with fsGroup 999.
@@ -22,9 +22,9 @@ const writeKey = (key) =>
     flag: 'wx',
   });
 if (existsSync(join(directory, 'tls.p12'))) {
-  if (!existsSync(join(directory, identityKey))) {
-    writeKey(identityKey);
-    console.log(`Added the ${environment} identity graph credential; no other rotation performed`);
+  if (!existsSync(join(directory, appKey))) {
+    writeKey(appKey);
+    console.log(`Added the ${environment} application graph credential; no other rotation performed`);
   } else console.log(`Reusing ${environment} data credentials; no rotation performed`);
   process.exit(0);
 }
@@ -36,7 +36,7 @@ for (const key of [
   'cassandra-graph-password',
   'cassandra-state-password',
   'gremlin-password',
-  identityKey,
+  appKey,
   'tls-password',
 ]) {
   writeKey(key);

@@ -109,7 +109,7 @@ mark production complete from rendered manifests, local tests or dev readiness.
 3. Provision dev credentials using
    `DATA_KUBECONFIG=... node deploy/data/kubernetes.mjs provision-secret dev`.
    The command creates a missing Secret and never overwrites an existing key; for
-   an existing Secret it only adds a missing `gremlin-identity-password`.
+   an existing Secret it only adds a missing `gremlin-app-password`.
 4. Set `data/dev/helmrelease.yaml` to `suspend: false` through GitOps. Verify the
    actual release, jobs, ready pods, graph smoke, invalid credentials, role
    isolation, pod replacement, chart upgrade, and storage survival.
@@ -135,9 +135,9 @@ Secret `cartyx-data` exists independently in each namespace and contains:
 - `cassandra-state-password`: SELECT/MODIFY in application-owned state only.
 - `gremlin-password`: infrastructure administrator (`cartyx_admin`). Never mount
   it into application pods.
-- `gremlin-identity-password`: trusted identity-service principal
-  (`cartyx_identity`), restricted server-side to exact immutable-profile bytecode
-  by the [identity policy](../../images/janusgraph/authorization/IDENTITY-POLICY.md).
+- `gremlin-app-password`: trusted application service principal (`cartyx_app`),
+  restricted server-side to an allowlisted traversal vocabulary by the
+  [application policy](../../images/janusgraph/authorization/APP-POLICY.md).
   It must exist before JanusGraph starts on this chart revision. No application
   deployment receives it yet; a future app-namespace Secret must carry only this
   credential and the CA, never the rest of `cartyx-data`.

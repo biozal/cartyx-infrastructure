@@ -96,7 +96,7 @@ spec:
               - { key: tls-password, path: tls-password }
               - { key: cassandra-graph-password, path: cassandra-graph-password }
               - { key: gremlin-password, path: gremlin-password }
-              - { key: gremlin-identity-password, path: gremlin-identity-password }
+              - { key: gremlin-app-password, path: gremlin-app-password }
         - name: bootstrap-secrets
           secret:
             secretName: {{ .Values.secretName }}
