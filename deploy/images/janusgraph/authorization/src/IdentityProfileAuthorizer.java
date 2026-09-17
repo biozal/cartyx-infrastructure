@@ -1,20 +1,45 @@
 package io.cartyx.graph;
 
 import org.apache.tinkerpop.gremlin.process.traversal.Bytecode;
+import org.apache.tinkerpop.gremlin.process.traversal.P;
+import org.apache.tinkerpop.gremlin.process.traversal.TextP;
 import org.apache.tinkerpop.gremlin.server.auth.AuthenticatedUser;
 import org.apache.tinkerpop.gremlin.server.authz.AuthorizationException;
 import org.apache.tinkerpop.gremlin.server.authz.Authorizer;
 import org.apache.tinkerpop.gremlin.util.message.RequestMessage;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-/** Service-level policy v1. End-user authorization still belongs to the application. */
+/**
+ * Service-level policy v2. The application is a trusted service account with ordinary
+ * data access: bounded bytecode built from an allowlisted step vocabulary, and nothing
+ * that executes server-side code, reconfigures the traversal source, reads the schema
+ * registry or runs OLAP. Per-user and per-campaign authorization remains the
+ * application's responsibility; this policy cannot express it.
+ */
 public final class IdentityProfileAuthorizer implements Authorizer {
     private static final Set<String> ARGUMENTS = Set.of("gremlin", "aliases", "batchSize", "evaluationTimeout", "userAgent");
-    private static final String[] CONTENT = {"FirstName", "LastName", "AvatarUrl", "Role", "RulerColor", "CreatedAt", "LastLoginAt"};
     private static final Map<String, String> ALIASES = Map.of("g", "g");
+    static final int MAX_STEPS = 256, MAX_DEPTH = 8, MAX_STRING = 1 << 20, MAX_COLLECTION = 1024;
+
+    /** Read, write, filter, traverse and shape results. No lambdas, scripts, OLAP or configuration. */
+    static final Set<String> STEPS = Set.of(
+            "V", "E", "addV", "addE", "property", "from", "to", "drop",
+            "has", "hasLabel", "hasNot", "is", "where", "and", "or", "not", "coalesce", "choose", "optional",
+            "out", "in", "both", "outE", "inE", "bothE", "outV", "inV", "otherV", "bothV",
+            "values", "valueMap", "elementMap", "properties", "label", "id", "key", "value",
+            "count", "limit", "range", "skip", "tail", "order", "by", "dedup", "fold", "unfold",
+            "project", "select", "as", "identity", "union", "repeat", "times", "until", "emit",
+            "simplePath", "group", "groupCount", "inject", "constant", "sum", "min", "max", "mean",
+            "barrier", "cap", "store", "aggregate", "local");
+    /** Keys and labels that belong to schema/migration bookkeeping, never to application data. */
+    static final Set<String> RESERVED_LABELS = Set.of("GraphSchema");
+    private static final Set<String> RESERVED_PREFIXES = Set.of("graphSchema", "graphProbe");
+    private static final Set<String> KEY_STEPS = Set.of("has", "hasNot", "property", "values", "valueMap", "properties", "by", "select", "as", "project", "group", "groupCount", "aggregate", "store", "cap");
+    private static final Set<String> LABEL_STEPS = Set.of("addV", "addE", "hasLabel");
+    private static final Set<String> PREDICATES = Set.of(
+            "eq", "neq", "lt", "lte", "gt", "gte", "inside", "outside", "between", "within", "without",
+            "containing", "startingWith", "endingWith");
 
     public void setup(Map<String, Object> config) throws AuthorizationException {
         require(config == null || config.isEmpty());
@@ -24,22 +49,30 @@ public final class IdentityProfileAuthorizer implements Authorizer {
         return user != null && !user.isAnonymous() && "cartyx_admin".equals(user.getName());
     }
 
-    private static void runtime(AuthenticatedUser user) throws AuthorizationException {
-        require(user != null && !user.isAnonymous() && "cartyx_identity".equals(user.getName()));
+    /**
+     * The application service account. `cartyx_identity` is the deployed name from the
+     * earlier profile-only policy; `cartyx_app` is the name this policy is renamed to
+     * once the pins and chart configuration land together.
+     */
+    private static final Set<String> APPLICATION = Set.of("cartyx_identity", "cartyx_app");
+
+    private static void application(AuthenticatedUser user) throws AuthorizationException {
+        require(user != null && !user.isAnonymous() && APPLICATION.contains(user.getName()));
     }
 
     /** Called for EVERY RequestMessage by IdentityChannelizer, before the stock operation switch. */
     public void authorizeRequest(AuthenticatedUser user, RequestMessage request) throws AuthorizationException {
         if (admin(user)) return;
-        runtime(user);
+        application(user);
         require("bytecode".equals(request.getOp()) && "traversal".equals(request.getProcessor()));
         Map<String, Object> args = request.getArgs();
         require(ARGUMENTS.containsAll(args.keySet()) && args.containsKey("gremlin") && args.containsKey("aliases"));
         require(args.get("gremlin") != null && args.get("gremlin").getClass() == Bytecode.class);
         require(ALIASES.equals(args.get("aliases")));
-        if (args.containsKey("batchSize")) require(integer(args.get("batchSize"), 1, 64));
+        if (args.containsKey("batchSize")) require(integer(args.get("batchSize"), 1, 1024));
         if (args.containsKey("evaluationTimeout")) require(integer(args.get("evaluationTimeout"), 50, 15000));
-        if (args.containsKey("userAgent")) require("cartyx-graph-foundation".equals(args.get("userAgent")));
+        if (args.containsKey("userAgent")) require(args.get("userAgent") instanceof String
+                && ((String) args.get("userAgent")).startsWith("cartyx-") && ((String) args.get("userAgent")).length() <= 64);
     }
 
     /** HTTP/script entry point. Runtime scripts are never evaluated. */
@@ -49,135 +82,69 @@ public final class IdentityProfileAuthorizer implements Authorizer {
 
     public Bytecode authorize(AuthenticatedUser user, Bytecode code, Map<String, String> aliases) throws AuthorizationException {
         if (admin(user)) return code;
-        runtime(user);
+        application(user);
         require(ALIASES.equals(aliases));
-        validateTree(code, 0, new int[]{0});
-        List<Bytecode.Instruction> steps = code.getStepInstructions();
-        require(steps.size() >= 6);
-        String scope = argument(steps, 1, "has", "scope");
-        String kind = argument(steps, 2, "has", "kind");
-        String id = argument(steps, 3, "has", "entityId");
-        require(id.matches("[0-9a-f]{24}"));
-        Bytecode expected;
-        if ("global".equals(scope) && "User".equals(kind)) {
-            if (steps.size() == 6) {
-                expected = identity(scope, kind, id); step(expected, "limit", 2L); step(expected, "label");
-            } else if (steps.size() == 7) {
-                Bytecode create = b("addV", "User");
-                properties(create, scope, kind, id);
-                expected = upsert(identity(scope, kind, id), create);
-            } else if (steps.size() == 10) {
-                String revisionScope = argument(steps, 5, "has", "scope");
-                String revisionId = argument(steps, 7, "has", "entityId");
-                revision(id, revisionScope, revisionId);
-                expected = identity(scope, kind, id); step(expected, "out", "HAS_PROFILE_REVISION");
-                filters(expected, revisionScope, "UserProfileRevision", revisionId);
-                step(expected, "limit", 2L); step(expected, "count");
-            } else {
-                require(steps.size() == 11);
-                String revisionScope = argument(steps, 6, "has", "scope");
-                String revisionId = argument(steps, 8, "has", "entityId");
-                revision(id, revisionScope, revisionId);
-                expected = identity(scope, kind, id); step(expected, "as", "owner"); step(expected, "V");
-                filters(expected, revisionScope, "UserProfileRevision", revisionId);
-                Bytecode owner = b("outV"); filters(owner, scope, kind, id);
-                Bytecode existing = b("inE", "HAS_PROFILE_REVISION"); step(existing, "where", owner);
-                Bytecode create = b("addE", "HAS_PROFILE_REVISION"); step(create, "from", "owner");
-                step(expected, "coalesce", existing, create); step(expected, "count");
-            }
-        } else {
-            require(scope.matches("user:[0-9a-f]{24}") && "UserProfileRevision".equals(kind));
-            if (steps.size() == 8) {
-                expected = identity(scope, kind, id); step(expected, "limit", 2L);
-                step(expected, "project", "label", "properties");
-                step(expected, "by", b("label")); step(expected, "by", b("valueMap"));
-            } else {
-                require(steps.size() == 7);
-                Object[] branches = steps.get(5).getArguments();
-                require("coalesce".equals(steps.get(5).getOperator()) && branches.length == 2 && branches[1] instanceof Bytecode);
-                List<Bytecode.Instruction> creation = ((Bytecode) branches[1]).getStepInstructions();
-                require(creation.size() >= 5 && creation.size() <= 12);
-                String digest = argument(creation, 4, "property", "identityProfileDigest");
-                require(digest.matches("[0-9a-f]{64}"));
-                Bytecode create = b("addV", "UserProfileRevision"); properties(create, scope, kind, id);
-                step(create, "property", "identityProfileDigest", digest);
-                int next = 5;
-                for (String field : CONTENT) {
-                    String key = "identityProfile" + field;
-                    if (next < creation.size() && creation.get(next).getArguments().length == 2 && key.equals(creation.get(next).getArguments()[0])) {
-                        String value = argument(creation, next++, "property", key);
-                        content(field, value); step(create, "property", key, value);
-                    }
-                }
-                require(next == creation.size());
-                expected = upsert(identity(scope, kind, id), create);
-            }
-        }
-        require(same(code, expected));
-        // Return a fresh canonical tree rather than forwarding client-owned objects.
-        return expected;
+        return copy(code, 0, new int[]{0});
     }
 
-    private static void content(String field, String value) throws AuthorizationException {
-        if (field.equals("FirstName") || field.equals("LastName")) require(value.length() <= 1024);
-        else if (field.equals("AvatarUrl")) require(value.length() <= 4096);
-        else if (field.equals("Role")) require(Set.of("gm", "player", "unknown").contains(value));
-        else if (field.equals("RulerColor")) require(value.matches("#[0-9a-fA-F]{6}"));
-        else {
-            require(value.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z"));
-            try {
-                require(DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(java.time.ZoneOffset.UTC).format(Instant.parse(value)).equals(value));
-            } catch (java.time.DateTimeException invalid) { throw denied(); }
-        }
-    }
-
-    private static void revision(String owner, String scope, String id) throws AuthorizationException {
-        require(scope.equals("user:" + owner) && id.matches("[0-9a-f]{24}"));
-    }
-    private static String argument(List<Bytecode.Instruction> steps, int index, String op, String key) throws AuthorizationException {
-        require(index < steps.size());
-        Bytecode.Instruction instruction = steps.get(index);
-        Object[] args = instruction.getArguments();
-        require(op.equals(instruction.getOperator()) && args.length == 2 && key.equals(args[0]) && args[1] instanceof String);
-        return (String) args[1];
-    }
-    private static void validateTree(Bytecode code, int depth, int[] count) throws AuthorizationException {
-        require(code != null && code.getClass() == Bytecode.class && depth <= 4 && code.getSourceInstructions().isEmpty());
+    /** Validates while rebuilding: the forwarded tree is this policy's own structure. */
+    private static Bytecode copy(Bytecode code, int depth, int[] count) throws AuthorizationException {
+        require(code != null && code.getClass() == Bytecode.class && depth <= MAX_DEPTH
+                && code.getSourceInstructions().isEmpty());
+        Bytecode checked = new Bytecode();
         for (Bytecode.Instruction instruction : code.getStepInstructions()) {
-            require(++count[0] <= 64 && instruction.getArguments().length <= 3);
-            for (Object value : instruction.getArguments()) {
-                if (value instanceof Bytecode) validateTree((Bytecode) value, depth + 1, count);
-                else if (value instanceof String) {
-                    String text = (String) value;
-                    require(text.length() <= 4096 && new String(text.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8).equals(text));
-                } else require(integer(value, 2, 2));
-            }
+            String operator = instruction.getOperator();
+            require(++count[0] <= MAX_STEPS && STEPS.contains(operator));
+            Object[] arguments = instruction.getArguments();
+            // Internal element IDs are never application identifiers.
+            require(!(("V".equals(operator) || "E".equals(operator)) && arguments.length != 0));
+            Object[] checkedArguments = new Object[arguments.length];
+            for (int i = 0; i < arguments.length; i++)
+                checkedArguments[i] = value(operator, i, arguments[i], depth, count);
+            checked.addStep(operator, checkedArguments);
         }
+        return checked;
     }
+
+    private static Object value(String operator, int index, Object argument, int depth, int[] count) throws AuthorizationException {
+        if (argument instanceof Bytecode) return copy((Bytecode) argument, depth + 1, count);
+        if (argument instanceof String) {
+            String text = (String) argument;
+            require(text.length() <= MAX_STRING
+                    && new String(text.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8).equals(text));
+            if (LABEL_STEPS.contains(operator)) require(!RESERVED_LABELS.contains(text));
+            // Property keys are the first argument of a key step; has(key, predicate) and
+            // property(key, value) both place the key there, as does property(cardinality, key, value).
+            if (KEY_STEPS.contains(operator) && index <= 1) require(RESERVED_PREFIXES.stream().noneMatch(text::startsWith));
+            return text;
+        }
+        if (argument instanceof P) {
+            P<?> predicate = (P<?>) argument;
+            require(predicate.getClass() == P.class || predicate.getClass() == TextP.class);
+            require(predicate.getBiPredicate() != null && PREDICATES.contains(predicate.getBiPredicate().toString()));
+            Object inner = predicate.getValue();
+            if (inner instanceof Collection) {
+                Collection<?> values = (Collection<?>) inner;
+                require(values.size() <= MAX_COLLECTION);
+                for (Object item : values) value(operator, index, item, depth, count);
+            } else value(operator, index, inner, depth, count);
+            return predicate;
+        }
+        require(argument == null
+                || argument instanceof Integer || argument instanceof Long
+                || argument instanceof Double || argument instanceof Float
+                || argument instanceof Boolean || argument instanceof java.util.Date
+                || argument instanceof UUID || argument instanceof Enum);
+        // Enums are TinkerPop's fixed tokens (T, Order, Scope, Column, Direction, Cardinality, Pop).
+        if (argument instanceof Enum)
+            require(argument.getClass().getName().startsWith("org.apache.tinkerpop.gremlin.")
+                    || argument.getClass().getName().startsWith("org.janusgraph.core."));
+        return argument;
+    }
+
     private static boolean integer(Object value, long min, long max) {
         return (value instanceof Integer || value instanceof Long) && ((Number) value).longValue() >= min && ((Number) value).longValue() <= max;
     }
-    private static boolean same(Bytecode actual, Bytecode expected) {
-        List<Bytecode.Instruction> a = actual.getStepInstructions(), e = expected.getStepInstructions();
-        if (a.size() != e.size()) return false;
-        for (int i = 0; i < a.size(); i++) {
-            if (!a.get(i).getOperator().equals(e.get(i).getOperator())) return false;
-            Object[] aa = a.get(i).getArguments(), ee = e.get(i).getArguments();
-            if (aa.length != ee.length) return false;
-            for (int j = 0; j < aa.length; j++) {
-                if (ee[j] instanceof Bytecode) { if (!(aa[j] instanceof Bytecode) || !same((Bytecode) aa[j], (Bytecode) ee[j])) return false; }
-                else if (ee[j] instanceof Long) { if (!integer(aa[j], (Long) ee[j], (Long) ee[j])) return false; }
-                else if (!ee[j].equals(aa[j])) return false;
-            }
-        }
-        return true;
-    }
-    private static Bytecode b(String op, Object... args) { Bytecode b = new Bytecode(); step(b, op, args); return b; }
-    private static void step(Bytecode b, String op, Object... args) { b.addStep(op, args); }
-    private static Bytecode identity(String scope, String kind, String id) { Bytecode b = b("V"); filters(b, scope, kind, id); return b; }
-    private static void filters(Bytecode b, String scope, String kind, String id) { step(b, "has", "scope", scope); step(b, "has", "kind", kind); step(b, "has", "entityId", id); }
-    private static void properties(Bytecode b, String scope, String kind, String id) { step(b, "property", "scope", scope); step(b, "property", "kind", kind); step(b, "property", "entityId", id); }
-    private static Bytecode upsert(Bytecode b, Bytecode create) { step(b, "fold"); step(b, "coalesce", b("unfold"), create); step(b, "count"); return b; }
     private static AuthorizationException denied() { return new AuthorizationException("Request denied"); }
     private static void require(boolean allowed) throws AuthorizationException { if (!allowed) throw denied(); }
 }

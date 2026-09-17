@@ -79,12 +79,14 @@ await bounded('identity principal script denial', async () => {
     await client.close();
   }
 });
-await bounded('identity principal general traversal denial', async () => {
+// Schema bookkeeping stays operator-only under every version of the policy.
+await bounded('identity principal schema-registry denial', async () => {
   const remote = new gremlin.driver.DriverRemoteConnection(endpoint, restricted);
   try {
     const g = gremlin.process.AnonymousTraversalSource.traversal().withRemote(remote);
-    await assert.rejects(() => g.V().limit(1).count().next(), denied);
-    await assert.rejects(() => g.addV('InfraProbe').property('infraId', 'denied').next(), denied);
+    await assert.rejects(() => g.V().hasLabel('GraphSchema').count().next(), denied);
+    await assert.rejects(() => g.V().has('graphSchemaVersion', '0001').count().next(), denied);
+    await assert.rejects(() => g.addV('GraphSchema').next(), denied);
   } finally {
     await remote.close();
   }
