@@ -163,12 +163,9 @@ try {
       '--wait-timeout',
       '600',
     ]);
-    const restoredEnv = { ...process.env, GREMLIN_URL: 'wss://localhost:18183/gremlin' };
-    // The search index lives outside the archive and is rebuilt from restored data.
-    execFileSync(process.execPath, ['deploy/data/reindex.mjs'], { stdio: 'inherit', env: restoredEnv });
     execFileSync(process.execPath, ['deploy/data/smoke.mjs', 'verify'], {
       stdio: 'inherit',
-      env: restoredEnv,
+      env: { ...process.env, GREMLIN_URL: 'wss://localhost:18183/gremlin' },
     });
     console.log(
       `Restore verified in independent volume ${volume}. Stop the cartyx-restore project after inspection; source data was untouched.`

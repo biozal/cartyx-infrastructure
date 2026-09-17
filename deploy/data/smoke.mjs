@@ -44,25 +44,8 @@ try {
           m.buildIndex('byInfraId', Vertex.class).addKey(key).unique().buildCompositeIndex();
         }
         if (m.getPropertyKey('infraValue') == null) m.makePropertyKey('infraValue').dataType(String.class).make();
-        // Mixed index: word search must work through the embedded Lucene backend.
-        def text = m.getPropertyKey('infraText');
-        if (text == null) {
-          text = m.makePropertyKey('infraText').dataType(String.class).make();
-          m.buildIndex('byInfraText', Vertex.class).addKey(text, org.janusgraph.core.schema.Mapping.TEXT.asParameter()).buildMixedIndex('search');
-        }
         m.commit();
       } catch (Exception e) { m.rollback(); throw e; }
-      org.janusgraph.graphdb.database.management.ManagementSystem.awaitGraphIndexStatus(graph, 'byInfraText')
-        .status(org.janusgraph.core.schema.SchemaStatus.ENABLED, org.janusgraph.core.schema.SchemaStatus.REGISTERED).call();
-      def enable = graph.openManagement();
-      try {
-        def index = enable.getGraphIndex('byInfraText');
-        if (index.getFieldKeys().any { index.getIndexStatus(it) == org.janusgraph.core.schema.SchemaStatus.REGISTERED })
-          enable.updateIndex(index, org.janusgraph.core.schema.SchemaAction.ENABLE_INDEX);
-        enable.commit();
-      } catch (Exception e) { enable.rollback(); throw e; }
-      org.janusgraph.graphdb.database.management.ManagementSystem.awaitGraphIndexStatus(graph, 'byInfraText')
-        .status(org.janusgraph.core.schema.SchemaStatus.ENABLED).call();
       true
     `);
     await request(
@@ -70,7 +53,6 @@ try {
       def a = g.V().has('infraId', left).fold().coalesce(unfold(), addV('InfraProbe').property('infraId', left)).next();
       def b = g.V().has('infraId', right).fold().coalesce(unfold(), addV('InfraProbe').property('infraId', right)).next();
       a.property('infraValue', 'persisted');
-      a.property('infraText', 'the quick brown fox');
       if (!g.V(a).out('INFRA_LINK').has('infraId', right).hasNext()) a.addEdge('INFRA_LINK', b);
       graph.tx().commit(); true
     `,
@@ -89,16 +71,6 @@ try {
       { left: 'cartyx-infra-left', right: 'cartyx-infra-right' }
     );
     assert.equal(Number(result.first()), 1, 'Exactly one persisted relationship must survive');
-    // Word search through the mixed index, not a full scan.
-    const searched = await request(
-      "g.V().has('infraText', org.janusgraph.core.attribute.Text.textContains('brown')).has('infraId', left).count().next()",
-      { left: 'cartyx-infra-left' }
-    );
-    assert.equal(Number(searched.first()), 1, 'Mixed index must serve a word search');
-    const missing = await request(
-      "g.V().has('infraText', org.janusgraph.core.attribute.Text.textContains('aardvark')).count().next()"
-    );
-    assert.equal(Number(missing.first()), 0, 'Unmatched words find nothing');
     const remote = new gremlin.driver.DriverRemoteConnection(endpoint, options);
     try {
       const g = gremlin.process.AnonymousTraversalSource.traversal().withRemote(remote);
@@ -113,7 +85,7 @@ try {
       await remote.close();
     }
     console.log(
-      'Verified persisted graph relationship and mixed-index word search over authenticated TLS/GraphSON 3 and JavaScript bytecode'
+      'Verified persisted graph relationship over authenticated TLS/GraphSON 3 and JavaScript bytecode'
     );
   }
 } finally {

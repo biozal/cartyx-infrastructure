@@ -2,5 +2,3 @@ environment: local
 cassandra:
   storageClass: standard
   storage: 10Gi
-janusgraph:
-  indexStorageClass: standard

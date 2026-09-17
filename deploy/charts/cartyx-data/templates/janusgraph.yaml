@@ -1,20 +1,4 @@
 apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ include "data.name" . }}-janusgraph-index
-  labels:
-    {{- include "data.labels" . | nindent 4 }}
-  annotations:
-    helm.sh/resource-policy: keep
-    kustomize.toolkit.fluxcd.io/prune: disabled
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: {{ .Values.janusgraph.indexStorageClass | quote }}
-  resources:
-    requests:
-      storage: {{ .Values.janusgraph.indexStorage | quote }}
----
-apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "data.name" . }}-janusgraph
@@ -75,7 +59,6 @@ spec:
             - { name: CASSANDRA_HOST, value: {{ include "data.name" . }}-cassandra }
             - { name: CASSANDRA_DC, value: {{ .Values.datacenter | quote }} }
             - { name: GRAPH_KEYSPACE, value: {{ .Values.graphKeyspace | quote }} }
-            - { name: JANUSGRAPH_INDEX_DIR, value: /var/lib/janusgraph/index }
           ports:
             - { name: gremlin-tls, containerPort: 8182 }
           resources:
@@ -100,10 +83,7 @@ spec:
           volumeMounts:
             - { name: config, mountPath: /config, readOnly: true }
             - { name: secrets, mountPath: /secrets, readOnly: true }
-            - { name: index, mountPath: /var/lib/janusgraph/index }
       volumes:
-        - name: index
-          persistentVolumeClaim: { claimName: {{ include "data.name" . }}-janusgraph-index }
         - name: config
           configMap: { name: {{ include "data.name" . }}-config }
         - name: secrets

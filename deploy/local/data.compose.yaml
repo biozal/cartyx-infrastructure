@@ -48,7 +48,6 @@ services:
     ports:
       - '127.0.0.1:${GREMLIN_LOCAL_PORT:-18182}:8182'
     volumes:
-      - janusgraph-index:/var/lib/janusgraph/index
       - ../charts/cartyx-data/files:/config:ro
       - ../../.local/data/local:/secrets:ro
     depends_on:
@@ -70,4 +69,3 @@ services:
 
 volumes:
   cassandra-data:
-  janusgraph-index:

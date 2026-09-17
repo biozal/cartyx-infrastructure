@@ -79,9 +79,6 @@ try {
     forward.stdout.on('data', chunk => {const match = String(chunk).match(/127\.0\.0\.1:(\d+) ->/); if (match) {clearTimeout(timer); resolve(match[1]);}});
   });
   const env = {...process.env, DATA_SECRETS_DIR: credentials, GREMLIN_URL: `wss://localhost:${port}/gremlin`};
-  // The Lucene index volume is deliberately absent from the archive; rebuild it from
-  // the restored Cassandra data before any search-dependent verification.
-  execFileSync(process.execPath, ['deploy/data/reindex.mjs'], {stdio: 'inherit', env});
   execFileSync(process.execPath, ['deploy/data/smoke.mjs', 'verify'], {stdio: 'inherit', env});
   execFileSync(process.execPath, ['deploy/data/security.mjs'], {stdio: 'inherit', env});
   execFileSync(process.execPath, ['deploy/data/kubernetes.mjs', 'cql-security', environment], {stdio: 'inherit', env: {...process.env, DATA_NAMESPACE: namespace}});
