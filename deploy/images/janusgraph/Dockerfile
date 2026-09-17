@@ -36,7 +36,10 @@ COPY --from=upstream /opt/janusgraph/conf/janusgraph-server.yaml /opt/janusgraph
 COPY --from=upstream /opt/janusgraph/scripts/empty-sample.groovy scripts/
 COPY --from=upstream /opt/janusgraph/LICENSE.txt /opt/janusgraph/NOTICE.txt ./
 COPY --chmod=755 server.sh bin/janusgraph-server.sh
-RUN mkdir logs run && chown 999:999 logs run
+# The search index directory is a mount point: create it owned by the runtime user so a
+# fresh named volume or PVC inherits that ownership instead of staying root-owned.
+RUN mkdir logs run /var/lib/janusgraph /var/lib/janusgraph/index \
+    && chown 999:999 logs run /var/lib/janusgraph /var/lib/janusgraph/index
 COPY dependencies.sha256 /usr/share/cartyx/dependencies.sha256
 WORKDIR /opt/janusgraph
 RUN sha256sum -c /usr/share/cartyx/dependencies.sha256 \

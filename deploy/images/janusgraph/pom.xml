@@ -24,10 +24,15 @@
     <dependency><groupId>com.rabbitmq</groupId><artifactId>amqp-client</artifactId><version>5.34.0</version></dependency>
     <dependency><groupId>commons-io</groupId><artifactId>commons-io</artifactId><version>2.22.0</version></dependency>
     <dependency><groupId>org.yaml</groupId><artifactId>snakeyaml</artifactId><version>2.5</version></dependency>
+    <!-- janusgraph-lucene would otherwise pull spatial4j back to 0.7. -->
+    <dependency><groupId>org.locationtech.spatial4j</groupId><artifactId>spatial4j</artifactId><version>0.8</version></dependency>
   </dependencies></dependencyManagement>
   <dependencies>
     <!-- CQL's Hadoop integration is optional upstream and is deliberately not included. -->
     <dependency><groupId>org.janusgraph</groupId><artifactId>janusgraph-cql</artifactId><version>${janusgraph.version}</version></dependency>
+    <!-- Embedded mixed index for word search. Single JanusGraph instance only; the index
+         lives on its own volume and is rebuilt from Cassandra after a restore. -->
+    <dependency><groupId>org.janusgraph</groupId><artifactId>janusgraph-lucene</artifactId><version>${janusgraph.version}</version></dependency>
     <dependency><groupId>org.apache.tinkerpop</groupId><artifactId>gremlin-server</artifactId><version>${tinkerpop.version}</version></dependency>
     <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-slf4j-impl</artifactId></dependency>
     <dependency><groupId>com.github.jbellis</groupId><artifactId>jamm</artifactId><version>0.3.3</version></dependency>
