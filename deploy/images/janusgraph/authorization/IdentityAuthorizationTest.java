@@ -106,6 +106,13 @@ public final class IdentityAuthorizationTest {
             code(g.V().has("scope", SCOPE).has("kind", "Location").has("createdAt", P.gte(new java.util.Date(0)))
                     .groupCount().by(__.values("ix_s1"))),
             code(g.E().hasLabel("WITHIN").limit(10).count()),
+            // Replacing a multi-valued word set in one transaction: the old values are
+            // dropped and the new ones written in the same traversal.
+            code(g.V().has("scope", SCOPE).has("kind", "Location").has("entityId", ID).has("revision", 1L)
+                    .sideEffect(__.properties("searchWord").drop())
+                    .property(VertexProperty.Cardinality.set, "searchWord", "tavern")
+                    .property(VertexProperty.Cardinality.set, "searchWord", "bree")
+                    .property(VertexProperty.Cardinality.single, "revision", 2L).count()),
             code(g.V().has("scope", SCOPE).has("kind", "Location").has("entityId", ID).drop()));
     }
 
@@ -140,7 +147,7 @@ public final class IdentityAuthorizationTest {
             assertions.incrementAndGet();
             // Every step, including nested anonymous traversals, is checked individually.
             for (int step = 0; step < steps(allowed); step++) {
-                deny(mutate(allowed, "sideEffect", new int[]{step}, new int[]{0}));
+                deny(mutate(allowed, "path", new int[]{step}, new int[]{0}));
                 deny(mutate(allowed, "unknownStep", new int[]{step}, new int[]{0}));
             }
         }
@@ -158,7 +165,9 @@ public final class IdentityAuthorizationTest {
         deny(code(g.V().tree()));
         deny(code(g.V().subgraph("sub")));
         deny(code(g.V().math("1+1")));
-        deny(code(g.V().sideEffect(__.drop())));
+        deny(code(g.V().sideEffect(__.V("1"))));
+        deny(code(g.V().sideEffect(__.hasLabel("GraphSchema"))));
+        deny(code(g.V().sideEffect(__.filter(traverser -> true))));
         deny(code(g.io("/etc/passwd").read()));
         deny(code(g.call("service")));
         // Internal element identifiers are never application identifiers.
