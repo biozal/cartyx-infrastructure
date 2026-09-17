@@ -33,12 +33,12 @@ credentials.setProperty('gremlin.tinkergraph.graphFormat', 'gryo')
 new File(root + '/credentials.kryo').delete()
 def authGraph = TinkerGraph.open(credentials)
 authGraph.traversal(CredentialTraversalSource.class).user('cartyx_admin', readSecret('gremlin-password')).iterate()
-// Trusted identity-service principal, restricted by IdentityProfileAuthorizer to
-// exact immutable-profile bytecode. Never mount the operator password into apps.
-def identityPassword = readSecret('gremlin-identity-password')
-if (identityPassword.length() < 32 || identityPassword == readSecret('gremlin-password'))
-    throw new IllegalStateException('Identity graph credential must be distinct and at least 32 characters')
-authGraph.traversal(CredentialTraversalSource.class).user('cartyx_identity', identityPassword).iterate()
+// Trusted application service principal, restricted by the server policy to an
+// allowlisted traversal vocabulary. Never mount the operator password into app pods.
+def appPassword = readSecret('gremlin-app-password')
+if (appPassword.length() < 32 || appPassword == readSecret('gremlin-password'))
+    throw new IllegalStateException('Application graph credential must be distinct and at least 32 characters')
+authGraph.traversal(CredentialTraversalSource.class).user('cartyx_app', appPassword).iterate()
 authGraph.close()
 def authProps = new Properties()
 credentials.getKeys().each { k -> authProps.setProperty(k, credentials.getString(k)) }
@@ -64,4 +64,4 @@ config.authorization = [authorizer: 'io.cartyx.graph.IdentityProfileAuthorizer',
 config.serializers = [[className: 'io.cartyx.graph.IdentityGraphSONSerializer',
     config: [ioRegistries: ['org.janusgraph.graphdb.tinkerpop.JanusGraphIoRegistry']]]]
 new File(root + '/server.yaml').text = yaml.dump(config)
-println('JanusGraph TLS/authentication/identity-policy configuration ready')
+println('JanusGraph TLS/authentication/app-policy configuration ready')

@@ -49,11 +49,10 @@ for (const [name, options, pattern] of [
   }
 }
 
-// The identity-service principal must authenticate, then receive only policy
-// denials for anything other than its exact immutable-profile bytecode. Allowed
-// profile forms need the application's identity schema and are tested there.
-const identity = readFileSync(`${dir}/gremlin-identity-password`, 'utf8').trim();
-assert.ok(identity.length >= 32 && identity !== password, 'Distinct identity graph credential');
+// The application principal must authenticate, then run only allowlisted traversal
+// steps. Per-entity authorization is the application's responsibility, not this policy's.
+const appPassword = readFileSync(`${dir}/gremlin-app-password`, 'utf8').trim();
+assert.ok(appPassword.length >= 32 && appPassword !== password, 'Distinct application graph credential');
 const bounded = async (name, action) => {
   const timer = setTimeout(() => {
     console.error(`${name}: no bounded result`);
@@ -66,32 +65,36 @@ const bounded = async (name, action) => {
     clearTimeout(timer);
   }
 };
-const restricted = {
+const application = {
   ...base,
-  authenticator: new gremlin.driver.auth.PlainTextSaslAuthenticator('cartyx_identity', identity),
+  authenticator: new gremlin.driver.auth.PlainTextSaslAuthenticator('cartyx_app', appPassword),
 };
 const denied = /Request denied/;
-await bounded('identity principal script denial', async () => {
-  const client = new gremlin.driver.Client(endpoint, restricted);
+await bounded('application principal script denial', async () => {
+  const client = new gremlin.driver.Client(endpoint, application);
   try {
     await assert.rejects(() => client.submit('1+1'), denied);
   } finally {
     await client.close();
   }
 });
-// Schema bookkeeping stays operator-only under every version of the policy.
-await bounded('identity principal schema-registry denial', async () => {
-  const remote = new gremlin.driver.DriverRemoteConnection(endpoint, restricted);
+await bounded('application principal ordinary traversal', async () => {
+  const remote = new gremlin.driver.DriverRemoteConnection(endpoint, application);
   try {
     const g = gremlin.process.AnonymousTraversalSource.traversal().withRemote(remote);
+    // An allowlisted, indexed read works: the application is an ordinary data client.
+    const count = await g.V().has('infraId', 'cartyx-infra-left').count().next();
+    assert.equal(Number(count.value), 1, 'Application principal may read its data');
+    // Schema bookkeeping, internal IDs and unlisted steps stay refused.
     await assert.rejects(() => g.V().hasLabel('GraphSchema').count().next(), denied);
     await assert.rejects(() => g.V().has('graphSchemaVersion', '0001').count().next(), denied);
     await assert.rejects(() => g.addV('GraphSchema').next(), denied);
+    await assert.rejects(() => g.V().path().next(), denied);
   } finally {
     await remote.close();
   }
 });
-await bounded('operator access through the identity policy', async () => {
+await bounded('operator access through the app policy', async () => {
   const client = new gremlin.driver.Client(endpoint, {
     ...base,
     authenticator: new gremlin.driver.auth.PlainTextSaslAuthenticator('cartyx_admin', password),

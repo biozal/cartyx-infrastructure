@@ -228,3 +228,55 @@ tested CI artifacts:
 `security.mjs` now also verifies, in CI and on every cluster restore, that the
 server never negotiates compression. Dev follows main; production stays on
 `data-v0.1.1`.
+
+## September 17 application-policy promotion
+
+Every Cartyx subsystem is migrating to the graph, so the server policy changed from an
+exact six-form profile allowlist to a policy over what a traversal may be made of:
+an allowlisted step vocabulary, predicates, literals and bounded shape. Server-side
+code, traversal-source configuration, OLAP, internal element IDs and the schema
+registry stay refused, and accepted trees are rebuilt before forwarding. The harness
+passes 419 assertions, including per-step mutation of every allowed traversal
+([PR #20](https://github.com/biozal/cartyx-infrastructure/pull/20), `830447a`).
+
+The image also packages JanusGraph's Lucene index backend
+([PR #21](https://github.com/biozal/cartyx-infrastructure/pull/21), `fef06d6`). It is
+**not configured**: the application's searches are word matching, which indexed tokens
+serve through ordinary composite indexes, so no mixed index, index volume or
+index rebuild-on-restore is needed. The dependency stays available for a later
+decision about prefix or fuzzy search, which would also need a client-side predicate
+serializer, because JanusGraph's Lucene backend only accepts its own `Text` predicate
+and not TinkerPop's `TextP`.
+
+This change also renames the application principal from `cartyx_identity` to
+`cartyx_app`, reading `gremlin-app-password`. The published policy accepts both names,
+so provisioning the new key and reconciling this revision cannot leave a window where
+the configuration names an account the running image does not have.
+
+[Publication run 35280700222](https://github.com/biozal/cartyx-infrastructure/actions/runs/35280700222)
+passed native amd64/arm64 builds, scans, TLS/authentication, persistence and
+independent-volume restore. No scan has an unexcepted HIGH/CRITICAL finding; the
+Cassandra SnakeYAML exception is unchanged. `com.rabbitmq:amqp-client` advanced to
+5.34.0 for CVE-2026-75516, and `spatial4j` is pinned at 0.8 so janusgraph-lucene
+cannot pull it back to 0.7.
+
+This change selects the following OCI index digests in both Chart and Compose:
+
+- cassandra: `ghcr.io/biozal/cartyx-cassandra@sha256:c4ccea0458a14c6ecab494719e6afaa75f8b67f50151e9a112c32f3186f3454b`
+- janusgraph: `ghcr.io/biozal/cartyx-janusgraph@sha256:7d8de7cb985d0e20737c8acd066771f412f3cc68f8f61ace05a2ee6253d6618a`
+
+Anonymous registry requests re-hashed each index (exactly linux/amd64 and linux/arm64)
+and matched each architecture's manifest and config digest to the tested CI artifacts:
+
+| Image | amd64 manifest | arm64 manifest |
+|---|---|---|
+| cassandra | `sha256:417b21edb88ac133f6c15b9a67ec664b58437ae29c0bf6b4d3effa2d6f1ac3ae` | `sha256:27869a61125c530428104185ad9f38d772be97374717c23f41fc1aca498faf02` |
+| janusgraph | `sha256:85128c53812a9e8fe8197a697e2ec36fc354bc511694c97d2d5b96c3b46a0d36` | `sha256:15077365c2de9142698afffaa8cb8aeea52208c7b49df1d990b7792e5b3cf6ed` |
+
+`security.mjs` now checks that the application principal may run ordinary indexed reads
+but not scripts, the schema registry, internal IDs or unlisted steps, in CI, in dev and
+on every cluster restore.
+
+Provision `gremlin-app-password` (`kubernetes.mjs provision-secret <env>`) BEFORE an
+environment reconciles this revision; JanusGraph fails closed without it. Dev follows
+main. Production stays on `data-v0.1.1` until its own reviewed promotion.
