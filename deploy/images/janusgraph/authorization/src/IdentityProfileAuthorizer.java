@@ -31,7 +31,11 @@ public final class IdentityProfileAuthorizer implements Authorizer {
             "count", "limit", "range", "skip", "tail", "order", "by", "dedup", "fold", "unfold",
             "project", "select", "as", "identity", "union", "repeat", "times", "until", "emit",
             "simplePath", "group", "groupCount", "inject", "constant", "sum", "min", "max", "mean",
-            "barrier", "cap", "store", "aggregate", "local");
+            "barrier", "cap", "store", "aggregate", "local",
+            // A side effect is exactly as constrained as its child traversal, which this
+            // policy validates recursively. It lets one transaction replace a multi-valued
+            // property set instead of leaving a window where search data is stale.
+            "sideEffect");
     /** Keys and labels that belong to schema/migration bookkeeping, never to application data. */
     static final Set<String> RESERVED_LABELS = Set.of("GraphSchema");
     private static final Set<String> RESERVED_PREFIXES = Set.of("graphSchema", "graphProbe");

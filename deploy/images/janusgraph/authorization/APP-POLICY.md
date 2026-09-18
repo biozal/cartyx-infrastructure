@@ -40,7 +40,10 @@ transactions, scripts and every other request argument are refused.
   values valueMap elementMap properties label id key value count limit range skip
   tail order by dedup fold unfold project select as identity union repeat times
   until emit simplePath group groupCount inject constant sum min max mean barrier
-  cap store aggregate local`.
+  cap store aggregate local sideEffect`. A side effect is exactly as constrained as
+  its child traversal, which the policy validates recursively; it exists so that one
+  transaction can replace a multi-valued property set, such as the search word set,
+  instead of leaving a window where that data is stale.
 - **Predicates** — `eq neq lt lte gt gte inside outside between within without`
   and the text predicates `containing startingWith endingWith`.
 - **Literals** — strings (≤1 MiB, valid UTF-16), Int32/Int64/Double/Float, Boolean,
@@ -52,8 +55,8 @@ transactions, scripts and every other request argument are refused.
 
 ### What is refused
 
-- Anything that runs server-side code: lambdas, scripts, `math`, `sideEffect`,
-  `io`, `call`, `program`.
+- Anything that runs server-side code: lambdas, scripts, `math`, `io`, `call`,
+  `program`.
 - Traversal-source configuration: `withStrategies`, `withSideEffect`, `withSack`
   and every other source instruction.
 - OLAP and whole-graph shapes: `pageRank`, `peerPressure`, `connectedComponent`,
