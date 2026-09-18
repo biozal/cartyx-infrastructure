@@ -143,11 +143,14 @@ try {
       '/data',
     ]);
     // Compose merges ports by target/published port. Use !override to ensure the
-    // rehearsal never tries to bind the live local stack's 18182 port.
+    // rehearsal never tries to bind the live local stack's published ports, which it
+    // would otherwise inherit for both Gremlin and the loopback CQL forwarder.
     const yamlOverride = `${outputDirectory}/restore.compose.yaml`;
     writeFileSync(
       yamlOverride,
-      `services:\n  janusgraph:\n    ports: !override\n      - '127.0.0.1:18183:8182'\nvolumes:\n  cassandra-data:\n    external: true\n    name: ${volume}\n`
+      `services:\n  janusgraph:\n    ports: !override\n      - '127.0.0.1:18183:8182'\n` +
+        `  cql-proxy:\n    ports: !override\n      - '127.0.0.1:19043:9042'\n` +
+        `volumes:\n  cassandra-data:\n    external: true\n    name: ${volume}\n`
     );
     run([
       'compose',
