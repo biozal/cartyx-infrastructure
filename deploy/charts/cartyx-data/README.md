@@ -37,9 +37,20 @@ by exporting `CARTYX_INFRASTRUCTURE_DIR` as an absolute path in the shell.
 Credentials, preflight reports, and backups belong under this repo's ignored
 `.local`, regardless of which repository starts the services.
 
-Gremlin is `wss://localhost:18182/gremlin` (loopback only). CQL has no host port.
-Inside Compose use `janusgraph:8182` and `cassandra:9042`. The project is always
-`cartyx-local`, so dependency-only and full-app commands share the same volume.
+Gremlin is `wss://localhost:18182/gremlin` and CQL is `127.0.0.1:19042`, both
+loopback only. Cassandra itself publishes no port: the CQL endpoint is a forwarder
+that starts only after bootstrap has replaced the default login, so a freshly created
+cluster still has no host-reachable default-login window, and administration goes
+through `docker exec` as before. Inside Compose use `janusgraph:8182` and
+`cassandra:9042`. The project is always `cartyx-local`, so dependency-only and
+full-app commands share the same volume.
+
+The Cassandra volume outlives the generated credentials in `.local/data/local`. If
+those are regenerated — a fresh checkout, a different worktree, a deleted `.local` —
+the old roles no longer match and every login fails, which surfaces only as a
+container that never becomes healthy. Remove the volume and let it bootstrap again:
+`docker compose -p cartyx-local -f deploy/local/data.compose.yaml down` then
+`docker volume rm cartyx-local_cassandra-data`.
 
 Full application stack: run these commands from **`cartyx-app`**, using its `.env`:
 
