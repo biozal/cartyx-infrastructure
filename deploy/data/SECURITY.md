@@ -280,3 +280,33 @@ on every cluster restore.
 Provision `gremlin-app-password` (`kubernetes.mjs provision-secret <env>`) BEFORE an
 environment reconciles this revision; JanusGraph fails closed without it. Dev follows
 main. Production stays on `data-v0.1.1` until its own reviewed promotion.
+
+## September 18 validated-side-effect promotion
+
+The entity store keeps search words as a multi-valued property, and replacing that
+set must drop the old values and write the new ones in one traversal. The policy
+therefore allows `sideEffect`, whose child traversal the policy validates by the same
+vocabulary: it cannot carry a lambda, an internal element id, the schema registry or
+any unlisted step. Tests cover the replacement form and three such attempts, and the
+per-step mutation substitutes a still-denied step. 449 assertions
+([PR #23](https://github.com/biozal/cartyx-infrastructure/pull/23), `a49e977`).
+
+[Publication run 35295668372](https://github.com/biozal/cartyx-infrastructure/actions/runs/35295668372)
+passed native amd64/arm64 builds, scans, TLS/authentication, persistence and
+independent-volume restore, with no unexcepted HIGH/CRITICAL findings.
+
+This change selects the following OCI index digests in both Chart and Compose:
+
+- cassandra: `ghcr.io/biozal/cartyx-cassandra@sha256:249aec9fb84e9fdcf2b2a16d5193c762d90aa395c2dba067f83a010a0525b17d`
+- janusgraph: `ghcr.io/biozal/cartyx-janusgraph@sha256:b1c05e2e77e8fbb058b3e0bf2cb334a0be78291e17480e98d610a26812028a0b`
+
+Anonymous registry requests re-hashed each index (exactly linux/amd64 and linux/arm64)
+and matched each architecture's manifest and config digest to the tested CI artifacts:
+
+| Image | amd64 manifest | arm64 manifest |
+|---|---|---|
+| cassandra | `sha256:945c9bfcbd535accf24a14453b384d031b9b51199cae4b1ee93e3b4f856a0fce` | `sha256:8dd42696086916a06c8e8e787d57e91134ccb04bbc3078f398fab318a00d4e62` |
+| janusgraph | `sha256:e1b7f5efc84545e153dc91593c4e41d0bcfca4a6cc792f06165652b86f848cc6` | `sha256:7f8278341a2d989aea6dbcff5dc87ec8e23c48895d33bf414454f46b3fba7665` |
+
+Credentials, configuration, storage versions and graph schema are unchanged. Dev
+follows main; production stays on `data-v0.1.1`.
