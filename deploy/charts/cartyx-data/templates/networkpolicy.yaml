@@ -22,6 +22,10 @@ spec:
               cartyx.io/data-client: 'true'
       ports:
         - { protocol: TCP, port: 8182 }
+        # The application keeps its operational state in CQL (identity accounts,
+        # reservations and receipts) and reaches it with the restricted
+        # `cartyx_state` role, whose password is the only CQL credential it mounts.
+        - { protocol: TCP, port: 9042 }
   egress:
     - to:
         - podSelector:
