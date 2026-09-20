@@ -161,8 +161,9 @@ The readiness container/bootstrap job has separate access. Never print rendered
 secret-bearing configuration or upload `.local` to CI artifacts.
 
 Services are private; NetworkPolicy permits same-namespace data pods and
-explicitly labeled `cartyx.io/data-client: 'true'` Gremlin clients. CQL is not
-open to application pods yet. DNS egress is restricted to kube-system DNS.
+explicitly labeled `cartyx.io/data-client: 'true'` clients, which reach both the
+graph (8182) and CQL (9042) — the application keeps its operational state in CQL
+and connects as the restricted `cartyx_state` role. DNS egress is restricted to kube-system DNS.
 Kind's default CNI does not enforce NetworkPolicy: real k3s cross-namespace
 denial tests remain mandatory. Port-forward is an operator access path.
 

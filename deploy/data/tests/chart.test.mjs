@@ -69,6 +69,16 @@ for (const environment of ['local', 'dev', 'prod']) {
     assert.ok(
       !policy.spec.ingress.some((r) => r.from.some((f) => f.namespaceSelector || f.ipBlock))
     );
+    // Application pods reach the graph AND CQL; nothing else in the namespace does,
+    // and no rule admits another namespace or a CIDR.
+    const appRule = policy.spec.ingress.find((r) =>
+      r.from.some((f) => f.podSelector?.matchLabels?.['cartyx.io/data-client'] === 'true')
+    );
+    assert.deepEqual(
+      appRule.ports.map((p) => p.port).sort(),
+      [8182, 9042],
+      'data clients reach the graph and CQL'
+    );
     const config = resources.find((r) => r.kind === 'ConfigMap').data;
     assert.match(config['cassandra-start.sh'], /optional: false/);
     assert.match(config['janusgraph-config.groovy'], /SimpleAuthenticator/);
