@@ -1,0 +1,32 @@
+---
+# Where Flux reads desired state from. The repo is public, so no secretRef is
+# needed -- nothing in this cluster holds a Git credential.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/biozal/cartyx-infrastructure.git
+  ref:
+    branch: main
+---
+# Root Kustomization. Applies everything in this directory, which in turn
+# declares the `infrastructure`, `apps` and `data-prod` Kustomizations.
+#
+# This cluster hosts PRODUCTION ONLY. Unlike clusters/z440, it deliberately does
+# not declare `data-dev` or `platform`: dev and the observability stack stay on
+# z440, so a change here cannot disturb them.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./clusters/cartyx-prod
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

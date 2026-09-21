@@ -1,0 +1,27 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps
+  namespace: flux-system
+spec:
+  interval: 5m
+  # PROD ONLY. clusters/z440 reconciles ./apps (dev + prod); this cluster takes
+  # ./apps/prod so a dev-namespace change can never render here.
+  path: ./apps/prod
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # Namespaces and ClusterIssuers must exist first, or the Certificate in
+  # apps/prod/certificate.yaml fails with "issuer not found" on the first reconcile.
+  dependsOn:
+    - name: infrastructure
+  # `wait` blocks Ready until every applied resource is healthy, so a
+  # crash-looping Deployment shows NotReady instead of a green "applied".
+  #
+  # Deliberately no `healthChecks`: Flux IGNORES that field when `wait` is true,
+  # so the list in clusters/z440/apps.yaml is inert -- and its entries (web, ws)
+  # no longer match the chart's Deployment names (cartyx-web, cartyx-realtime).
+  # Carrying it over would look like a safety net that does nothing.
+  wait: true
+  timeout: 5m
