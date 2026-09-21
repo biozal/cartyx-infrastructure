@@ -1,0 +1,15 @@
+---
+# Prod chart source. clusters/z440 gets this from apps/sources.yaml, which also
+# declares the dev branch; this cluster reconciles ./apps/prod directly, so it
+# declares only the branch it actually serves. A dev source here would give a
+# production cluster a live pointer at unreviewed code.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: cartyx-app-main
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/biozal/cartyx-app
+  ref:
+    branch: main
