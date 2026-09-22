@@ -1,7 +1,8 @@
 ---
-# Chart sources: the app repo's deploy/charts/cartyx, tracked per branch so
-# chart changes flow with the same merge that ships the code (dev branch ->
-# dev namespace, main -> prod). Public repo: no credentials.
+# Chart source for this cluster's dev namespace. Production moved to
+# clusters/cartyx-prod, which declares its own `cartyx-app-main` source; a
+# main-branch source here would be unused, and pointing a cluster at a branch
+# it does not deploy is how the wrong revision eventually ships.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
@@ -12,14 +13,3 @@ spec:
   url: https://github.com/biozal/cartyx-app
   ref:
     branch: dev
----
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: GitRepository
-metadata:
-  name: cartyx-app-main
-  namespace: flux-system
-spec:
-  interval: 1m
-  url: https://github.com/biozal/cartyx-app
-  ref:
-    branch: main
