@@ -1,6 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+# Dev only. Production moved to its own cluster (clusters/cartyx-prod), which
+# reconciles ./apps/prod directly and does NOT go through this aggregator --
+# so apps/prod stays in the repo and is still deployed, just not from here.
 resources:
   - sources.yaml
   - dev
-  - prod
